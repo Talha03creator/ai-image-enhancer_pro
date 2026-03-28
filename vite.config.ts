@@ -19,14 +19,19 @@ export default defineConfig(({mode}) => {
       hmr: process.env.DISABLE_HMR !== 'true',
     },
     build: {
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 2000,
+      reportCompressedSize: false,
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor-react': ['react', 'react-dom'],
-            'vendor-motion': ['motion/react'],
-            'vendor-lucide': ['lucide-react'],
-            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('firebase')) return 'vendor-firebase';
+              if (id.includes('motion')) return 'vendor-motion';
+              if (id.includes('lucide')) return 'vendor-lucide';
+              if (id.includes('react')) return 'vendor-react';
+              if (id.includes('sharp') || id.includes('ffmpeg')) return 'vendor-heavy';
+              return 'vendor-utils';
+            }
           },
         },
       },

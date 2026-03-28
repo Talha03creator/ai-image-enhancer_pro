@@ -6,14 +6,7 @@ import sharp from "sharp";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import cors from "cors";
-import ffmpeg from "fluent-ffmpeg";
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import ffprobeInstaller from "@ffprobe-installer/ffprobe";
-import pLimit from "p-limit";
 import os from "os";
-
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
-ffmpeg.setFfprobePath(ffprobeInstaller.path);
 
 async function processImagePipeline(inputPath: string, outputPath: string, mode: string, flags: any) {
   const { isFaceEnhancementEnabled, isBackgroundBlurEnabled, isColorPopEnabled, isSmartHdrEnabled } = flags;
@@ -261,28 +254,6 @@ async function startServer() {
   sharp.cache(false);
   sharp.concurrency(1); // Reduce concurrency to save memory in constrained environments
   
-  // Check for ffmpeg availability
-  let ffmpegAvailable = false;
-  try {
-    if (fs.existsSync(ffmpegInstaller.path)) {
-      // Ensure it's executable
-      try {
-        fs.chmodSync(ffmpegInstaller.path, 0o755);
-        if (fs.existsSync(ffprobeInstaller.path)) {
-          fs.chmodSync(ffprobeInstaller.path, 0o755);
-        }
-      } catch (e) {
-        console.warn("Could not set executable permissions on ffmpeg/ffprobe:", e);
-      }
-      ffmpegAvailable = true;
-      console.log("FFmpeg binary found at:", ffmpegInstaller.path);
-    } else {
-      console.warn("FFmpeg binary NOT found at:", ffmpegInstaller.path);
-    }
-  } catch (e) {
-    console.error("Error checking ffmpeg path:", e);
-  }
-
   // Create directories if they don't exist
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
   if (!fs.existsSync(outputsDir)) fs.mkdirSync(outputsDir, { recursive: true });
@@ -307,9 +278,12 @@ async function startServer() {
     }
   });
 
+  // Vercel has a 4.5MB payload limit. We should check this early.
   const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 30 * 1024 * 1024 } // 30MB limit
+    limits: { 
+      fileSize: isVercel ? 4 * 1024 * 1024 : 30 * 1024 * 1024 
+    } 
   });
 
   // Serve static files from outputs
@@ -339,192 +313,67 @@ async function startServer() {
       
       const inputPath = req.file.path;
       
-      if (req.file.mimetype.startsWith('video/')) {
-        if (!ffmpegAvailable) {
-          throw new Error("Video processing is currently unavailable on this environment (FFmpeg not found).");
-        }
+      const outputFilename = `enhanced-${uuidv4()}.jpg`;
+      const outputPath = path.join(outputsDir, outputFilename);
 
-        const outputFilename = `enhanced-${uuidv4()}.mp4`;
-        const outputPath = path.join(outputsDir, outputFilename);
-        const tempDir = path.join(outputsDir, `temp-${uuidv4()}`);
-        fs.mkdirSync(tempDir);
+      let { recommendations, metadata } = await processImagePipeline(inputPath, outputPath, mode, {
+        isFaceEnhancementEnabled,
+        isBackgroundBlurEnabled,
+        isColorPopEnabled,
+        isSmartHdrEnabled
+      });
 
-        try {
-          // Extract frames
-          console.log("Extracting frames...");
-          await new Promise((resolve, reject) => {
-            ffmpeg(inputPath)
-              .outputOptions(['-qscale:v 4']) // Slightly lower quality for faster extraction
-              .output(path.join(tempDir, 'frame-%04d.jpg'))
-              .on('end', resolve)
-              .on('error', (err) => {
-                console.error("FFmpeg extraction error:", err);
-                reject(new Error(`Frame extraction failed: ${err.message}`));
-              })
-              .run();
-          });
-
-          // Process frames
-          const files = fs.readdirSync(tempDir).filter(f => f.startsWith('frame-'));
-          console.log(`Processing ${files.length} frames...`);
+      // If on Vercel, ensure the Base64 response stays under the 4.5MB limit
+      if (useBase64) {
+        let stats = fs.statSync(outputPath);
+        // Vercel limit is 4.5MB, but Base64 adds ~33% overhead. 
+        // 3MB raw file -> ~4MB Base64. Let's target 3MB.
+        if (stats.size > 3 * 1024 * 1024) {
+          console.log(`Image too large for Vercel (${(stats.size / 1024 / 1024).toFixed(2)}MB). Performing aggressive re-compression...`);
+          // Try 60% quality first
+          await sharp(outputPath)
+            .jpeg({ quality: 60, mozjpeg: true })
+            .toFile(outputPath + '.tmp');
           
-          // On Vercel, limit frames to avoid timeout
-          const maxFrames = isVercel ? 30 : 300;
-          const framesToProcess = files.slice(0, maxFrames);
-          if (files.length > maxFrames) {
-            console.warn(`Video too long for Vercel. Truncating to ${maxFrames} frames.`);
-          }
-
-          const limit = pLimit(isVercel ? 1 : 2); // Even stricter on Vercel
-          let recommendations: string[] = [];
-          let metadata: any = {};
-
-          await Promise.all(framesToProcess.map(file => limit(async () => {
-            const frameInput = path.join(tempDir, file);
-            const frameOutput = path.join(tempDir, `out-${file}`);
-            const res = await processImagePipeline(frameInput, frameOutput, mode, {
-              isFaceEnhancementEnabled,
-              isBackgroundBlurEnabled,
-              isColorPopEnabled,
-              isSmartHdrEnabled
-            });
-            if (file === framesToProcess[0]) {
-              recommendations = res.recommendations;
-              metadata = res.metadata;
-            }
-          })));
-
-          // Get framerate of original video to match output
-          const fps = await new Promise((resolve) => {
-            ffmpeg.ffprobe(inputPath, (err, probeData) => {
-              if (err) {
-                console.warn("FFprobe failed, using default 30fps:", err);
-                resolve(30);
-                return;
-              }
-              const videoStream = probeData?.streams?.find(s => s.codec_type === 'video');
-              if (videoStream && videoStream.r_frame_rate) {
-                const [num, den] = videoStream.r_frame_rate.split('/');
-                resolve(parseInt(num) / parseInt(den));
-              } else {
-                resolve(30);
-              }
-            });
-          });
-
-          // Re-encode video
-          console.log("Re-encoding video...");
-          await new Promise((resolve, reject) => {
-            ffmpeg()
-              .input(path.join(tempDir, 'out-frame-%04d.jpg'))
-              .inputFPS(fps as number)
-              .outputOptions([
-                '-c:v libx264',
-                '-pix_fmt yuv420p',
-                '-crf 28', // Higher CRF for smaller file size on Vercel
-                '-preset ultrafast'
-              ])
-              .output(outputPath)
-              .on('end', resolve)
-              .on('error', (err) => {
-                console.error("FFmpeg encoding error:", err);
-                reject(new Error(`Video encoding failed: ${err.message}`));
-              })
-              .run();
-          });
-
-          // Check size for Vercel
-          if (useBase64) {
-            const stats = fs.statSync(outputPath);
-            if (stats.size > 4 * 1024 * 1024) {
-              throw new Error(`Enhanced video is too large for Vercel (${(stats.size / 1024 / 1024).toFixed(2)}MB). Max allowed is ~3.3MB raw.`);
-            }
-          }
-
-          res.json({
-            success: true,
-            enhancedImageUrl: useBase64
-              ? `data:video/mp4;base64,${fs.readFileSync(outputPath).toString('base64')}`
-              : `/outputs/${outputFilename}`,
-            recommendations: [...recommendations, isVercel && files.length > maxFrames ? "Note: Video was truncated due to Vercel execution limits." : ""].filter(Boolean),
-            metadata: {
-              ...metadata,
-              format: 'mp4'
-            }
-          });
-        } finally {
-          // Cleanup temp dir
-          if (fs.existsSync(tempDir)) {
-            fs.rmSync(tempDir, { recursive: true, force: true });
-          }
-          // Cleanup output file if we sent it as base64
-          if (useBase64 && fs.existsSync(outputPath)) {
-            fs.unlinkSync(outputPath);
-          }
-        }
-      } else {
-        const outputFilename = `enhanced-${uuidv4()}.jpg`;
-        const outputPath = path.join(outputsDir, outputFilename);
-
-        let { recommendations, metadata } = await processImagePipeline(inputPath, outputPath, mode, {
-          isFaceEnhancementEnabled,
-          isBackgroundBlurEnabled,
-          isColorPopEnabled,
-          isSmartHdrEnabled
-        });
-
-        // If on Vercel, ensure the Base64 response stays under the 4.5MB limit
-        if (useBase64) {
-          let stats = fs.statSync(outputPath);
-          // Vercel limit is 4.5MB, but Base64 adds ~33% overhead. 
-          // 3MB raw file -> ~4MB Base64. Let's target 3MB.
-          if (stats.size > 3 * 1024 * 1024) {
-            console.log(`Image too large for Vercel (${(stats.size / 1024 / 1024).toFixed(2)}MB). Performing aggressive re-compression...`);
-            // Try 60% quality first
+          let newStats = fs.statSync(outputPath + '.tmp');
+          if (newStats.size > 3.5 * 1024 * 1024) {
+            // Still too large? Go even lower.
+            console.log(`Still too large (${(newStats.size / 1024 / 1024).toFixed(2)}MB). Dropping to 40% quality.`);
             await sharp(outputPath)
-              .jpeg({ quality: 60, mozjpeg: true })
-              .toFile(outputPath + '.tmp');
-            
-            let newStats = fs.statSync(outputPath + '.tmp');
-            if (newStats.size > 3.5 * 1024 * 1024) {
-              // Still too large? Go even lower.
-              console.log(`Still too large (${(newStats.size / 1024 / 1024).toFixed(2)}MB). Dropping to 40% quality.`);
-              await sharp(outputPath)
-                .jpeg({ quality: 40, mozjpeg: true })
-                .toFile(outputPath + '.tmp2');
-              fs.renameSync(outputPath + '.tmp2', outputPath + '.tmp');
-            }
-            
-            fs.renameSync(outputPath + '.tmp', outputPath);
-            
-            // Final check
-            let finalStats = fs.statSync(outputPath);
-            if (finalStats.size > 4 * 1024 * 1024) {
-              throw new Error(`Enhanced image is too large for Vercel (${(finalStats.size / 1024 / 1024).toFixed(2)}MB). Please try a smaller image.`);
-            }
+              .jpeg({ quality: 40, mozjpeg: true })
+              .toFile(outputPath + '.tmp2');
+            fs.renameSync(outputPath + '.tmp2', outputPath + '.tmp');
+          }
+          
+          fs.renameSync(outputPath + '.tmp', outputPath);
+          
+          // Final check
+          let finalStats = fs.statSync(outputPath);
+          if (finalStats.size > 4 * 1024 * 1024) {
+            throw new Error(`Enhanced image is too large for Vercel (${(finalStats.size / 1024 / 1024).toFixed(2)}MB). Please try a smaller image.`);
           }
         }
-
-        const responseData = {
-          success: true,
-          enhancedImageUrl: useBase64 
-            ? `data:image/jpeg;base64,${fs.readFileSync(outputPath).toString('base64')}`
-            : `/outputs/${outputFilename}`,
-          recommendations,
-          metadata: {
-            originalWidth: metadata.width,
-            originalHeight: metadata.height,
-            mode: mode,
-            format: 'jpeg'
-          }
-        };
-
-        // Cleanup files
-        if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-        if (useBase64 && fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-
-        res.json(responseData);
       }
+
+      const responseData = {
+        success: true,
+        enhancedImageUrl: useBase64 
+          ? `data:image/jpeg;base64,${fs.readFileSync(outputPath).toString('base64')}`
+          : `/outputs/${outputFilename}`,
+        recommendations,
+        metadata: {
+          originalWidth: metadata.width,
+          originalHeight: metadata.height,
+          mode: mode,
+          format: 'jpeg'
+        }
+      };
+
+      // Cleanup files
+      if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+      if (useBase64 && fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+
+      res.json(responseData);
 
     } catch (error) {
       const errorDetails = {

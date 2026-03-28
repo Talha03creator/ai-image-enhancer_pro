@@ -121,7 +121,7 @@ interface HistoryItem {
   enhanced: string;
   mode: Mode;
   timestamp: number;
-  type: 'image' | 'video';
+  type: 'image';
 }
 
 interface QueuedFile {
@@ -132,7 +132,7 @@ interface QueuedFile {
   recommendations?: string[];
   status: 'pending' | 'processing' | 'done' | 'error';
   statusText?: string;
-  type: 'image' | 'video';
+  type: 'image';
   userName: string;
 }
 
@@ -150,7 +150,7 @@ const MODES: EnhancementMode[] = [
 
 // --- Components ---
 
-const ComparisonSlider = ({ before, after, type }: { before: string; after: string; type: 'image' | 'video' }) => {
+const ComparisonSlider = ({ before, after }: { before: string; after: string }) => {
   const [position, setPosition] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -201,22 +201,14 @@ const ComparisonSlider = ({ before, after, type }: { before: string; after: stri
       onTouchStart={handleMouseDown}
     >
       {/* After Media (Full background) */}
-      {type === 'video' ? (
-        <video src={after} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover" />
-      ) : (
-        <img src={after} alt="Enhanced" className="absolute inset-0 w-full h-full object-cover" />
-      )}
+      <img src={after} alt="Enhanced" className="absolute inset-0 w-full h-full object-cover" />
       
       {/* Before Media (Clipped) */}
       <div 
         className="absolute inset-0 w-full h-full overflow-hidden"
         style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
       >
-        {type === 'video' ? (
-          <video src={before} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover" />
-        ) : (
-          <img src={before} alt="Original" className="absolute inset-0 w-full h-full object-cover" />
-        )}
+        <img src={before} alt="Original" className="absolute inset-0 w-full h-full object-cover" />
       </div>
 
       {/* Handle */}
@@ -455,8 +447,7 @@ function AppContent() {
   const handleDownloadHistoryItem = (item: HistoryItem) => {
     const link = document.createElement('a');
     link.href = item.enhanced;
-    const ext = item.type === 'video' ? 'mp4' : 'png';
-    link.download = `lumina-${item.mode}-${Date.now()}.${ext}`;
+    link.download = `lumina-${item.mode}-${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -466,15 +457,14 @@ function AppContent() {
     try {
       const response = await fetch(item.original);
       const blob = await response.blob();
-      const ext = item.type === 'video' ? 'mp4' : 'jpg';
-      const file = new File([blob], `reapplied-${item.id}.${ext}`, { type: blob.type });
+      const file = new File([blob], `reapplied-${item.id}.jpg`, { type: blob.type });
       
       const newFile: QueuedFile = {
         id: Math.random().toString(36).substring(7),
         file,
         previewUrl: URL.createObjectURL(file),
         status: 'pending',
-        type: item.type,
+        type: 'image',
         userName: 'Talha Ansari'
       };
       
@@ -525,11 +515,11 @@ function AppContent() {
   };
   const handleFilesSelect = (files: FileList | File[]) => {
     const newFiles = Array.from(files).filter(f => 
-      (f.type.startsWith('image/') || f.type.startsWith('video/')) && 
+      f.type.startsWith('image/') && 
       f.size <= 30 * 1024 * 1024
     );
     if (newFiles.length === 0) {
-      alert('Please upload valid image or video files (JPG, PNG, MP4, MOV) under 30MB');
+      alert('Please upload valid image files (JPG, PNG) under 30MB');
       return;
     }
     
@@ -538,7 +528,7 @@ function AppContent() {
       file,
       previewUrl: URL.createObjectURL(file),
       status: 'pending' as const,
-      type: file.type.startsWith('video/') ? 'video' as const : 'image' as const,
+      type: 'image' as const,
       userName: 'Talha Ansari'
     }));
 
@@ -652,7 +642,7 @@ function AppContent() {
     voiceService.enhancementComplete();
   };
 
-  const handleDownloadAll = async () => {
+          const handleDownloadAll = async () => {
     for (const qFile of queue) {
       if (qFile.enhancedUrl) {
         try {
@@ -671,9 +661,6 @@ function AppContent() {
           a.href = url;
           
           let downloadName = `lumina-enhanced-${qFile.file.name}`;
-          if (qFile.type === 'video') {
-            downloadName = downloadName.replace(/\.[^/.]+$/, ".mp4");
-          }
           
           a.download = downloadName;
           document.body.appendChild(a);
@@ -1024,7 +1011,7 @@ function AppContent() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[
-                    { seed: 'nature', label: 'Landscape' },
+                    {seed: 'nature', label: 'Landscape' },
                     { seed: 'portrait', label: 'Portrait' },
                     { seed: 'city', label: 'Architecture' },
                     { seed: 'tech', label: 'Product' },
@@ -1107,8 +1094,8 @@ function AppContent() {
                   {[
                     { q: "How does the AI enhancement work?", a: "We use deep convolutional neural networks trained on millions of high-resolution image pairs to predict and reconstruct missing pixels." },
                     { q: "Is my data secure?", a: "Yes, all processing is done securely. We do not store your original images permanently unless you choose to save them to your history." },
-                    { q: "What file formats are supported?", a: "We support JPG, PNG, WebP for images, and MP4, MOV for video files up to 30MB." },
-                    { q: "How long does processing take?", a: "Most images are enhanced in under 1 second. Videos take longer depending on their length and resolution." }
+                    { q: "What file formats are supported?", a: "We support JPG, PNG, WebP for images up to 30MB." },
+                    { q: "How long does processing take?", a: "Most images are enhanced in under 1 second." }
                   ].map((faq, i) => (
                     <motion.div
                       key={i}
@@ -1196,13 +1183,9 @@ function AppContent() {
                   {activeFile && (
                     <>
                       {activeFile.enhancedUrl ? (
-                        <ComparisonSlider before={activeFile.previewUrl} after={activeFile.enhancedUrl} type={activeFile.type} />
+                        <ComparisonSlider before={activeFile.previewUrl} after={activeFile.enhancedUrl} />
                       ) : (
-                        activeFile.type === 'video' ? (
-                          <video src={activeFile.previewUrl} autoPlay loop muted playsInline className="w-full h-full object-contain" />
-                        ) : (
-                          <img src={activeFile.previewUrl} alt="Preview" className="w-full h-full object-contain" />
-                        )
+                        <img src={activeFile.previewUrl} alt="Preview" className="w-full h-full object-contain" />
                       )}
                       
                       {step === 'upload' && (
@@ -1247,11 +1230,7 @@ function AppContent() {
                           activeIndex === idx ? 'border-brand-primary' : 'border-white/10 hover:border-white/30'
                         }`}
                       >
-                        {qFile.type === 'video' ? (
-                          <video src={qFile.previewUrl} muted playsInline className="w-full h-full object-cover" />
-                        ) : (
-                          <img src={qFile.previewUrl} className="w-full h-full object-cover" />
-                        )}
+                        <img src={qFile.previewUrl} className="w-full h-full object-cover" />
                         {qFile.status === 'processing' && (
                           <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                             <Loader2 className="w-6 h-6 text-brand-primary animate-spin" />
@@ -1587,7 +1566,7 @@ function AppContent() {
                     <Upload className="w-10 h-10 text-brand-primary" />
                   </div>
                   <h2 className="text-2xl font-bold mb-2">Drag & Drop Files</h2>
-                  <p className="text-white/40 mb-8">Supports JPG, PNG, MP4, MOV up to 30MB. Upload multiple files at once.</p>
+                  <p className="text-white/40 mb-8">Supports JPG, PNG up to 30MB. Upload multiple files at once.</p>
                   <button 
                     onClick={() => fileInputRef.current?.click()}
                     className="px-8 py-4 bg-white text-black font-bold rounded-2xl hover:bg-brand-primary transition-all"
@@ -1603,7 +1582,7 @@ function AppContent() {
             type="file" 
             ref={fileInputRef} 
             className="hidden" 
-            accept="image/*,video/mp4,video/quicktime" 
+            accept="image/*" 
             multiple
             onChange={(e) => e.target.files && handleFilesSelect(e.target.files)} 
           />
@@ -1713,11 +1692,7 @@ function AppContent() {
                 <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-250px)] pr-2 no-scrollbar">
                   {filteredHistory.map((item) => (
                     <div key={item.id} className="group relative aspect-video rounded-2xl overflow-hidden border border-white/10 hover:border-brand-primary/50 transition-all bg-black/40">
-                      {item.type === 'video' ? (
-                        <video src={item.enhanced} autoPlay loop muted playsInline className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                      ) : (
-                        <img src={item.enhanced} alt="History" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                      )}
+                      <img src={item.enhanced} alt="History" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                       
                       {/* Top Actions */}
                       <div className="absolute top-0 left-0 right-0 p-3 flex justify-between items-start opacity-0 group-hover:opacity-100 transition-all translate-y-[-10px] group-hover:translate-y-0 bg-gradient-to-b from-black/80 to-transparent">
