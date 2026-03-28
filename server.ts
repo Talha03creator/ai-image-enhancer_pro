@@ -10,6 +10,7 @@ import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import ffprobeInstaller from "@ffprobe-installer/ffprobe";
 import pLimit from "p-limit";
+import os from "os";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 ffmpeg.setFfprobePath(ffprobeInstaller.path);
@@ -228,11 +229,14 @@ async function startServer() {
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
 
-  // Ensure directories exist
-  const uploadsDir = path.join(process.cwd(), 'uploads');
-  const outputsDir = path.join(process.cwd(), 'outputs');
-  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
-  if (!fs.existsSync(outputsDir)) fs.mkdirSync(outputsDir);
+  // Ensure directories exist - Use /tmp on Vercel as the filesystem is read-only
+  const isVercel = process.env.VERCEL === '1';
+  const baseDir = isVercel ? os.tmpdir() : process.cwd();
+  const uploadsDir = path.join(baseDir, 'uploads');
+  const outputsDir = path.join(baseDir, 'outputs');
+  
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+  if (!fs.existsSync(outputsDir)) fs.mkdirSync(outputsDir, { recursive: true });
 
   // Configure multer for file uploads
   const storage = multer.diskStorage({
@@ -371,7 +375,9 @@ async function startServer() {
 
         res.json({
           success: true,
-          enhancedImageUrl: `/outputs/${outputFilename}`,
+          enhancedImageUrl: isVercel 
+            ? `data:image/png;base64,${fs.readFileSync(outputPath).toString('base64')}`
+            : `/outputs/${outputFilename}`,
           recommendations,
           metadata: {
             originalWidth: metadata.width,
@@ -416,6 +422,8 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+
+  return app;
 }
 
-startServer();
+export default startServer();
