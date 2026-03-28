@@ -18,7 +18,15 @@ ffmpeg.setFfprobePath(ffprobeInstaller.path);
 async function processImagePipeline(inputPath: string, outputPath: string, mode: string, flags: any) {
   const { isFaceEnhancementEnabled, isBackgroundBlurEnabled, isColorPopEnabled, isSmartHdrEnabled } = flags;
   
+  if (!fs.existsSync(inputPath)) {
+    throw new Error(`Input file not found: ${inputPath}`);
+  }
+
+  console.log(`Processing image: ${inputPath} -> ${outputPath} (mode: ${mode})`);
+  
   const metadata = await sharp(inputPath).metadata();
+  console.log(`Metadata: ${JSON.stringify(metadata)}`);
+  
   let pipeline = sharp(inputPath);
 
   const currentWidth = metadata.width || 1000;
@@ -29,6 +37,7 @@ async function processImagePipeline(inputPath: string, outputPath: string, mode:
   
   pipeline = pipeline
     .flatten({ background: { r: 255, g: 255, b: 255 } })
+    .toColorspace('srgb')
     .toFormat('jpeg', { quality: 100 });
     
   if (targetWidth !== currentWidth) {
@@ -37,9 +46,15 @@ async function processImagePipeline(inputPath: string, outputPath: string, mode:
 
   let recommendations: string[] = [];
   const stats = await sharp(inputPath).stats();
+  console.log(`Stats: ${JSON.stringify(stats)}`);
+  
+  if (!stats.channels || stats.channels.length === 0) {
+    throw new Error("Could not analyze image channels.");
+  }
+
   const r = stats.channels[0];
-  const g = stats.channels[1];
-  const b = stats.channels[2];
+  const g = stats.channels[1] || r;
+  const b = stats.channels[2] || r;
   
   const avgBrightness = (r.mean + g.mean + b.mean) / 3;
   const avgContrast = (r.stdev + g.stdev + b.stdev) / 3;
@@ -235,12 +250,18 @@ async function startServer() {
   const uploadsDir = path.join(baseDir, 'uploads');
   const outputsDir = path.join(baseDir, 'outputs');
   
-  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-  if (!fs.existsSync(outputsDir)) fs.mkdirSync(outputsDir, { recursive: true });
+  // Create directories on each request if they don't exist
+  app.use((req, res, next) => {
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+    if (!fs.existsSync(outputsDir)) fs.mkdirSync(outputsDir, { recursive: true });
+    next();
+  });
 
   // Configure multer for file uploads
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {
+      // Ensure directory exists before multer uses it
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
       cb(null, uploadsDir);
     },
     filename: (req, file, cb) => {
@@ -373,7 +394,7 @@ async function startServer() {
           isSmartHdrEnabled
         });
 
-        res.json({
+        const responseData = {
           success: true,
           enhancedImageUrl: isVercel 
             ? `data:image/png;base64,${fs.readFileSync(outputPath).toString('base64')}`
@@ -385,7 +406,13 @@ async function startServer() {
             mode: mode,
             format: metadata.format
           }
-        });
+        };
+
+        // Cleanup files
+        if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+        if (isVercel && fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+
+        res.json(responseData);
       }
 
     } catch (error) {
@@ -396,12 +423,27 @@ async function startServer() {
         inputPath: req.file?.path
       };
       console.error("Enhancement error details:", errorDetails);
-      fs.appendFileSync('error.log', JSON.stringify(errorDetails) + '\n');
+      
+      // Cleanup input file on error
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (e) {
+          console.error("Failed to cleanup input file on error:", e);
+        }
+      }
+
       res.status(500).json({ 
-        error: "Failed to process image", 
-        details: error instanceof Error ? error.message : 'Unknown error'
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        details: error instanceof Error ? error.stack : undefined
       });
     }
+  });
+
+  // Health check
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
   });
 
   // Vite middleware for development
@@ -426,4 +468,5 @@ async function startServer() {
   return app;
 }
 
-export default startServer();
+// Start the server
+await startServer();
