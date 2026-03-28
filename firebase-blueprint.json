@@ -26,7 +26,7 @@
         "enhanced": { "type": "string", "format": "uri", "description": "URL to the enhanced image/video." },
         "mode": { "type": "string", "description": "Enhancement mode used." },
         "timestamp": { "type": "number", "description": "Unix timestamp of the enhancement." },
-        "type": { "type": "string", "enum": ["image", "video"], "description": "Type of media." }
+        "type": { "type": "string", "enum": ["image"], "description": "Type of media." }
       },
       "required": ["id", "uid", "name", "original", "enhanced", "mode", "timestamp", "type"]
     }
