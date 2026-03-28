@@ -11,6 +11,9 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@ffprobe-installer/ffprobe": "^2.1.2",
