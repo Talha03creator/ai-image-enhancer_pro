@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile in the system.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique Firebase Auth UID." },
+        "email": { "type": "string", "format": "email", "description": "The user's email address." },
+        "displayName": { "type": "string", "description": "The user's display name." },
+        "photoURL": { "type": "string", "format": "uri", "description": "The user's profile picture URL." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user account was created." },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "The user's role." }
+      },
+      "required": ["uid", "email"]
+    },
+    "HistoryItem": {
+      "title": "HistoryItem",
+      "description": "A record of a past image or video enhancement.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID for the history item." },
+        "uid": { "type": "string", "description": "The owner's UID." },
+        "name": { "type": "string", "description": "Original file name." },
+        "original": { "type": "string", "format": "uri", "description": "URL to the original image/video." },
+        "enhanced": { "type": "string", "format": "uri", "description": "URL to the enhanced image/video." },
+        "mode": { "type": "string", "description": "Enhancement mode used." },
+        "timestamp": { "type": "number", "description": "Unix timestamp of the enhancement." },
+        "type": { "type": "string", "enum": ["image", "video"], "description": "Type of media." }
+      },
+      "required": ["id", "uid", "name", "original", "enhanced", "mode", "timestamp", "type"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents."
+    },
+    "/history/{historyId}": {
+      "schema": "HistoryItem",
+      "description": "Collection of all enhancement history items."
+    }
+  }
+}
