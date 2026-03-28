@@ -138,7 +138,8 @@ async function processImagePipeline(inputPath: string, outputPath: string, mode:
       let composites: sharp.OverlayOptions[] = [];
 
       if (isBackgroundBlurEnabled) {
-        const currentBuffer = await pipeline.toFormat('png').toBuffer();
+        // Use JPEG for intermediate buffer to save memory and time
+        const currentBuffer = await pipeline.toFormat('jpeg', { quality: 90 }).toBuffer();
         const blurredBuffer = await sharp(currentBuffer).blur(8).toBuffer();
         
         const maskSvg = `<svg width="${targetWidth}" height="${targetHeight}">
@@ -151,7 +152,7 @@ async function processImagePipeline(inputPath: string, outputPath: string, mode:
         
         const maskedBlur = await sharp(blurredBuffer)
           .composite([{ input: Buffer.from(maskSvg), blend: 'dest-in' }])
-          .toFormat('png')
+          .toFormat('png') // PNG is required for alpha channel in composite
           .toBuffer();
           
         pipeline = sharp(currentBuffer);
@@ -406,27 +407,43 @@ async function startServer() {
           }
         }
       } else {
-        const outputFilename = `enhanced-${uuidv4()}.png`;
+        const outputFilename = `enhanced-${uuidv4()}.jpg`;
         const outputPath = path.join(outputsDir, outputFilename);
 
-        const { recommendations, metadata } = await processImagePipeline(inputPath, outputPath, mode, {
+        let { recommendations, metadata } = await processImagePipeline(inputPath, outputPath, mode, {
           isFaceEnhancementEnabled,
           isBackgroundBlurEnabled,
           isColorPopEnabled,
           isSmartHdrEnabled
         });
 
+        // If on Vercel, ensure the Base64 response stays under the 4.5MB limit
+        if (useBase64) {
+          let stats = fs.statSync(outputPath);
+          // Vercel limit is 4.5MB, but Base64 adds ~33% overhead. 
+          // 3MB raw file -> ~4MB Base64. Let's target 3MB.
+          if (stats.size > 3 * 1024 * 1024) {
+            console.log(`Image too large for Vercel (${(stats.size / 1024 / 1024).toFixed(2)}MB). Performing one-pass re-compression...`);
+            // Instead of a loop, do a one-pass re-compression with a lower quality
+            // This is much faster and avoids timeouts
+            await sharp(outputPath)
+              .jpeg({ quality: 60, mozjpeg: true })
+              .toFile(outputPath + '.tmp');
+            fs.renameSync(outputPath + '.tmp', outputPath);
+          }
+        }
+
         const responseData = {
           success: true,
           enhancedImageUrl: useBase64 
-            ? `data:image/png;base64,${fs.readFileSync(outputPath).toString('base64')}`
+            ? `data:image/jpeg;base64,${fs.readFileSync(outputPath).toString('base64')}`
             : `/outputs/${outputFilename}`,
           recommendations,
           metadata: {
             originalWidth: metadata.width,
             originalHeight: metadata.height,
             mode: mode,
-            format: metadata.format
+            format: 'jpeg'
           }
         };
 
@@ -483,12 +500,19 @@ async function startServer() {
     });
   }
 
+// Export the app for Vercel
+export default app;
+
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
-
-  return app;
 }
 
-// Start the server
-await startServer();
+return app;
+}
+
+// Start the server if not being imported as a module
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  await startServer();
+}
