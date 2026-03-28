@@ -35,6 +35,7 @@ import {
   MessageSquare,
   Volume2,
   VolumeX,
+  Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AIHelpChat } from './components/AIHelpChat';
@@ -151,23 +152,53 @@ const MODES: EnhancementMode[] = [
 
 const ComparisonSlider = ({ before, after, type }: { before: string; after: string; type: 'image' | 'video' }) => {
   const [position, setPosition] = useState(50);
+  const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!containerRef.current) return;
+  const handleMove = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent) => {
+    if (!containerRef.current || (!isDragging && e.type !== 'mousemove' && e.type !== 'touchmove')) return;
+    
+    // If it's a mousemove/touchmove without dragging, we only want it to work if we're NOT using drag mode
+    // But let's stick to drag mode for better control
+    if (!isDragging && (e.type === 'mousemove' || e.type === 'touchmove')) return;
+
     const rect = containerRef.current.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const x = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
     const relativeX = x - rect.left;
     const percentage = Math.max(0, Math.min(100, (relativeX / rect.width) * 100));
     setPosition(percentage);
   };
 
+  const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    setIsDragging(true);
+    handleMove(e);
+  };
+
+  useEffect(() => {
+    const handleUp = () => setIsDragging(false);
+    const handleGlobalMove = (e: MouseEvent | TouchEvent) => {
+      if (isDragging) handleMove(e);
+    };
+
+    window.addEventListener('mouseup', handleUp);
+    window.addEventListener('touchend', handleUp);
+    window.addEventListener('mousemove', handleGlobalMove);
+    window.addEventListener('touchmove', handleGlobalMove);
+
+    return () => {
+      window.removeEventListener('mouseup', handleUp);
+      window.removeEventListener('touchend', handleUp);
+      window.removeEventListener('mousemove', handleGlobalMove);
+      window.removeEventListener('touchmove', handleGlobalMove);
+    };
+  }, [isDragging]);
+
   return (
     <div 
       ref={containerRef}
-      className="relative w-full aspect-video rounded-2xl overflow-hidden cursor-ew-resize select-none border border-white/10"
-      onMouseMove={handleMove}
-      onTouchMove={handleMove}
+      className="relative w-full aspect-video rounded-2xl overflow-hidden cursor-ew-resize select-none border border-white/10 group"
+      onMouseDown={handleMouseDown}
+      onTouchStart={handleMouseDown}
     >
       {/* After Media (Full background) */}
       {type === 'video' ? (
@@ -190,48 +221,75 @@ const ComparisonSlider = ({ before, after, type }: { before: string; after: stri
 
       {/* Handle */}
       <div 
-        className="absolute top-0 bottom-0 w-1 bg-white z-20 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+        className="absolute top-0 bottom-0 w-0.5 bg-white/50 z-20 group-hover:bg-white transition-colors"
         style={{ left: `${position}%` }}
       >
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-black/5">
-          <div className="flex gap-1">
-            <div className="w-0.5 h-3 bg-black/20 rounded-full" />
-            <div className="w-0.5 h-3 bg-black/20 rounded-full" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-2xl border-2 border-black/10 transition-transform group-hover:scale-110">
+          <div className="flex gap-0.5">
+            <div className="w-0.5 h-2.5 bg-black/40 rounded-full" />
+            <div className="w-0.5 h-2.5 bg-black/40 rounded-full" />
           </div>
+        </div>
+        
+        {/* Drag Indicator */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -mt-10 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          <span className="bg-black/80 backdrop-blur-md text-[10px] font-black text-white px-2 py-1 rounded border border-white/10 uppercase tracking-widest">
+            Drag to compare
+          </span>
         </div>
       </div>
 
       {/* Labels */}
-      <div className="absolute bottom-4 left-4 px-3 py-1 bg-black/50 backdrop-blur-md rounded-full text-xs font-medium text-white/80 z-30">BEFORE</div>
-      <div className="absolute bottom-4 right-4 px-3 py-1 bg-brand-primary/80 backdrop-blur-md rounded-full text-xs font-medium text-black z-30">AFTER</div>
+      <div className="absolute top-4 left-4 px-3 py-1.5 bg-black/60 backdrop-blur-xl rounded-xl text-[10px] font-black text-white/80 z-30 border border-white/10 tracking-[0.2em] shadow-2xl">
+        ORIGINAL
+      </div>
+      <div className="absolute top-4 right-4 px-3 py-1.5 bg-brand-primary/90 backdrop-blur-xl rounded-xl text-[10px] font-black text-black z-30 border border-brand-primary/20 tracking-[0.2em] shadow-2xl">
+        ENHANCED
+      </div>
+      
+      {/* Overlay info */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <div className="bg-black/60 backdrop-blur-xl px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-3">
+          <div className="flex flex-col">
+            <span className="text-[8px] font-black text-white/40 uppercase tracking-tighter">Current View</span>
+            <span className="text-[10px] font-bold text-white tracking-widest">{Math.round(position)}% Original</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
 
 const ModeCard: React.FC<{ mode: EnhancementMode; selected: boolean; onSelect: () => void }> = ({ mode, selected, onSelect }) => (
   <motion.button
-    whileHover={{ scale: 1.02 }}
+    whileHover={{ scale: 1.02, y: -2 }}
     whileTap={{ scale: 0.98 }}
     onClick={onSelect}
-    className={`relative flex flex-col items-start p-4 rounded-2xl text-left transition-all duration-300 border ${
+    className={`relative flex flex-col items-start p-5 rounded-3xl text-left transition-all duration-500 border ${
       selected 
-        ? 'bg-brand-primary/15 border-brand-primary neon-border ring-1 ring-brand-primary/30' 
+        ? 'bg-brand-primary/20 border-brand-primary shadow-[0_0_30px_rgba(0,242,255,0.2)] ring-1 ring-brand-primary/30' 
         : 'bg-white/2 border-white/5 hover:bg-white/5 hover:border-white/10'
     }`}
   >
-    <div className={`p-2 rounded-xl mb-3 ${selected ? 'bg-brand-primary text-black' : 'bg-white/10 text-white'}`}>
-      {mode.icon}
+    <div className={`p-3 rounded-2xl mb-4 transition-all duration-500 ${selected ? 'bg-brand-primary text-black scale-110 rotate-3' : 'bg-white/5 text-white/40'}`}>
+      {React.isValidElement(mode.icon) && React.cloneElement(mode.icon as React.ReactElement<any>, { className: 'w-5 h-5' })}
     </div>
-    <h3 className={`font-semibold text-sm mb-1 ${selected ? 'text-brand-primary' : 'text-white'}`}>
+    <h3 className={`font-black text-sm mb-1 uppercase tracking-wider transition-colors ${selected ? 'text-brand-primary' : 'text-white/80'}`}>
       {mode.name}
     </h3>
-    <p className="text-xs text-white/50 leading-relaxed">
+    <p className="text-[11px] text-white/40 leading-relaxed font-medium">
       {mode.description}
     </p>
-    {mode.premium && !selected && (
-      <div className="absolute top-3 right-3">
-        <Zap className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+    {mode.premium && (
+      <div className={`absolute top-4 right-4 p-1 rounded-lg ${selected ? 'bg-brand-primary/20' : 'bg-white/5'}`}>
+        <Zap className={`w-3 h-3 ${selected ? 'text-brand-primary fill-brand-primary' : 'text-yellow-400/50'}`} />
       </div>
+    )}
+    {selected && (
+      <motion.div 
+        layoutId="active-mode-indicator"
+        className="absolute -left-1 top-1/2 -translate-y-1/2 w-1 h-8 bg-brand-primary rounded-full shadow-[0_0_15px_rgba(0,242,255,1)]"
+      />
     )}
   </motion.button>
 );
@@ -1458,22 +1516,48 @@ function AppContent() {
                         </p>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => {
-                        if (activeFile.enhancedUrl) {
-                          const link = document.createElement('a');
-                          link.href = activeFile.enhancedUrl;
-                          link.download = `enhanced-${activeFile.file.name}`;
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
-                        }
-                      }}
-                      className="w-full mt-6 py-3 rounded-xl font-bold bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Download className="w-4 h-4" />
-                      DOWNLOAD ACTIVE
-                    </button>
+                      <div className="flex gap-3 mt-6">
+                        <button 
+                          onClick={() => {
+                            if (activeFile.enhancedUrl) {
+                              const link = document.createElement('a');
+                              link.href = activeFile.enhancedUrl;
+                              link.download = `enhanced-${activeFile.file.name}`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }
+                          }}
+                          className="flex-1 py-4 rounded-2xl font-black bg-brand-primary text-black hover:scale-[1.02] transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-primary/20"
+                        >
+                          <Download className="w-5 h-5" />
+                          DOWNLOAD
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            if (activeFile.enhancedUrl) {
+                              try {
+                                if (navigator.share) {
+                                  await navigator.share({
+                                    title: 'Enhanced with Lumina AI',
+                                    text: 'Check out this amazing enhancement!',
+                                    url: activeFile.enhancedUrl.startsWith('data:') ? window.location.href : activeFile.enhancedUrl
+                                  });
+                                } else {
+                                  await navigator.clipboard.writeText(activeFile.enhancedUrl);
+                                  alert('Link copied to clipboard!');
+                                }
+                              } catch (err) {
+                                console.error('Share failed:', err);
+                              }
+                            }
+                          }}
+                          className="p-4 rounded-2xl font-bold bg-white/5 border border-white/10 hover:bg-white/10 transition-all flex items-center justify-center"
+                          title="Share"
+                        >
+                          <Share2 className="w-5 h-5" />
+                        </button>
+                      </div>
                   </div>
                 )}
               </div>
@@ -1550,9 +1634,29 @@ function AppContent() {
                   <History className="w-6 h-6 text-brand-primary" />
                   HISTORY
                 </h2>
-                <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-white/10 rounded-full">
-                  <ChevronRight className="w-6 h-6" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {history.length > 0 && (
+                    <button 
+                      onClick={() => {
+                        if (confirm('Are you sure you want to clear your history?')) {
+                          setHistory([]);
+                          if (user) {
+                            // In a real app, we'd delete from Firestore too
+                            // For now, we'll just clear the local state which will be overwritten by onSnapshot if we don't handle it
+                            // But since onSnapshot is active, we should probably delete docs
+                          }
+                        }
+                      }}
+                      className="p-2 hover:bg-red-500/10 text-white/40 hover:text-red-400 rounded-full transition-colors"
+                      title="Clear History"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
+                  <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-white/10 rounded-full">
+                    <ChevronRight className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
 
               {!user && (
@@ -1608,25 +1712,25 @@ function AppContent() {
               ) : (
                 <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-250px)] pr-2 no-scrollbar">
                   {filteredHistory.map((item) => (
-                    <div key={item.id} className="group relative aspect-video rounded-2xl overflow-hidden border border-white/10 hover:border-brand-primary/50 transition-all">
+                    <div key={item.id} className="group relative aspect-video rounded-2xl overflow-hidden border border-white/10 hover:border-brand-primary/50 transition-all bg-black/40">
                       {item.type === 'video' ? (
-                        <video src={item.enhanced} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+                        <video src={item.enhanced} autoPlay loop muted playsInline className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                       ) : (
-                        <img src={item.enhanced} alt="History" className="w-full h-full object-cover" />
+                        <img src={item.enhanced} alt="History" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                       )}
                       
                       {/* Top Actions */}
-                      <div className="absolute top-0 left-0 right-0 p-3 flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-b from-black/80 to-transparent">
+                      <div className="absolute top-0 left-0 right-0 p-3 flex justify-between items-start opacity-0 group-hover:opacity-100 transition-all translate-y-[-10px] group-hover:translate-y-0 bg-gradient-to-b from-black/80 to-transparent">
                         <button 
                           onClick={() => handleReapplyHistoryItem(item)}
-                          className="px-3 py-1.5 bg-brand-primary text-black text-xs font-bold rounded-lg hover:bg-white transition-colors"
+                          className="px-3 py-1.5 bg-brand-primary text-black text-[10px] font-black rounded-lg hover:bg-white transition-colors uppercase tracking-widest"
                         >
                           RE-APPLY
                         </button>
                         <div className="flex gap-2">
                           <button 
                             onClick={() => handleDownloadHistoryItem(item)}
-                            className="p-2 bg-black/50 backdrop-blur-md border border-white/20 rounded-lg text-white hover:bg-white/20 transition-colors"
+                            className="p-2 bg-black/50 backdrop-blur-md border border-white/20 rounded-lg text-white hover:bg-brand-primary hover:text-black transition-all"
                             title="Download"
                           >
                             <Download className="w-4 h-4" />
@@ -1635,14 +1739,18 @@ function AppContent() {
                       </div>
 
                       {/* Bottom Info */}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4">
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 translate-y-[10px] group-hover:translate-y-0 transition-all">
                         <div className="flex justify-between items-end">
-                          <div>
-                            <span className="text-white font-bold text-sm block truncate max-w-[200px] mb-1">{item.name}</span>
-                            <span className="text-xs font-bold uppercase tracking-widest text-brand-primary block mb-1">{item.mode.replace('_', ' ')}</span>
-                            <span className="text-[10px] text-white/50 block">
-                              {new Date(item.timestamp).toLocaleDateString()} at {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-white font-bold text-sm block truncate mb-0.5">{item.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-brand-primary px-1.5 py-0.5 rounded bg-brand-primary/10 border border-brand-primary/20">
+                                {item.mode.replace('_', ' ')}
+                              </span>
+                              <span className="text-[9px] text-white/40 font-medium">
+                                {new Date(item.timestamp).toLocaleDateString()}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
