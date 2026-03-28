@@ -18,12 +18,13 @@ ffmpeg.setFfprobePath(ffprobeInstaller.path);
 async function processImagePipeline(inputPath: string, outputPath: string, mode: string, flags: any) {
   const { isFaceEnhancementEnabled, isBackgroundBlurEnabled, isColorPopEnabled, isSmartHdrEnabled } = flags;
   
+  console.log(`Processing image: ${inputPath} -> ${outputPath} (mode: ${mode})`);
+  
   if (!fs.existsSync(inputPath)) {
+    console.error(`Input file not found: ${inputPath}`);
     throw new Error(`Input file not found: ${inputPath}`);
   }
 
-  console.log(`Processing image: ${inputPath} -> ${outputPath} (mode: ${mode})`);
-  
   const metadata = await sharp(inputPath).metadata();
   console.log(`Metadata: ${JSON.stringify(metadata)}`);
   
@@ -244,13 +245,26 @@ async function startServer() {
   app.use(cors());
   app.use(express.json({ limit: '50mb' }));
 
-  // Ensure directories exist - Use /tmp on Vercel as the filesystem is read-only
+  // Ensure directories exist - Use /tmp on serverless platforms as the filesystem is read-only
   const isVercel = process.env.VERCEL === '1';
-  const baseDir = isVercel ? os.tmpdir() : process.cwd();
+  const isCloudRun = process.env.K_SERVICE !== undefined;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const useTmp = isVercel || isCloudRun || isProduction;
+  const useBase64 = isVercel; // Only use Base64 for Vercel
+  
+  const baseDir = useTmp ? os.tmpdir() : process.cwd();
   const uploadsDir = path.join(baseDir, 'uploads');
   const outputsDir = path.join(baseDir, 'outputs');
   
-  // Create directories on each request if they don't exist
+  // Memory optimization for sharp
+  sharp.cache(false);
+  sharp.concurrency(1); // Reduce concurrency to save memory in constrained environments
+  
+  // Create directories if they don't exist
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+  if (!fs.existsSync(outputsDir)) fs.mkdirSync(outputsDir, { recursive: true });
+
+  // Create directories on each request if they don't exist (extra safety)
   app.use((req, res, next) => {
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
     if (!fs.existsSync(outputsDir)) fs.mkdirSync(outputsDir, { recursive: true });
@@ -280,8 +294,10 @@ async function startServer() {
 
   // API Routes
   app.post("/api/enhance", upload.single('image'), async (req, res) => {
+    console.log(`Received enhancement request: ${req.file?.originalname} (${req.file?.mimetype})`);
     try {
       if (!req.file) {
+        console.error("No image uploaded in request");
         return res.status(400).json({ error: "No image uploaded" });
       }
 
@@ -370,7 +386,9 @@ async function startServer() {
 
           res.json({
             success: true,
-            enhancedImageUrl: `/outputs/${outputFilename}`,
+            enhancedImageUrl: useBase64
+              ? `data:video/mp4;base64,${fs.readFileSync(outputPath).toString('base64')}`
+              : `/outputs/${outputFilename}`,
             recommendations,
             metadata: {
               ...metadata,
@@ -381,6 +399,10 @@ async function startServer() {
           // Cleanup temp dir
           if (fs.existsSync(tempDir)) {
             fs.rmSync(tempDir, { recursive: true, force: true });
+          }
+          // Cleanup output file if we sent it as base64
+          if (useBase64 && fs.existsSync(outputPath)) {
+            fs.unlinkSync(outputPath);
           }
         }
       } else {
@@ -396,7 +418,7 @@ async function startServer() {
 
         const responseData = {
           success: true,
-          enhancedImageUrl: isVercel 
+          enhancedImageUrl: useBase64 
             ? `data:image/png;base64,${fs.readFileSync(outputPath).toString('base64')}`
             : `/outputs/${outputFilename}`,
           recommendations,
@@ -410,7 +432,7 @@ async function startServer() {
 
         // Cleanup files
         if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-        if (isVercel && fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+        if (useBase64 && fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
 
         res.json(responseData);
       }

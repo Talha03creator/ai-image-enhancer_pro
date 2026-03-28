@@ -15,7 +15,6 @@ import { getFirestore, collection, doc, setDoc, getDoc, query, where, onSnapshot
 
 // Initialize Firebase SDK
 import firebaseConfig from '../firebase-applet-config.json';
-console.log('Firebase Config:', firebaseConfig);
 
 const app = initializeApp({
   apiKey: firebaseConfig.apiKey,

@@ -541,7 +541,8 @@ function AppContent() {
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
           console.error('Server error details:', errorData);
-          throw new Error(errorData?.details || 'Enhancement failed');
+          const errorMessage = errorData?.message || errorData?.details || 'Enhancement failed';
+          throw new Error(errorMessage);
         }
 
         const data = await response.json();
@@ -569,14 +570,22 @@ function AppContent() {
           addDoc(collection(db, 'history'), {
             ...newItem,
             uid: user.uid
-          }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'history'));
+          }).catch(err => {
+            console.error('Failed to save to history:', err);
+            // Don't throw here as it's not awaited and we don't want to break the UI
+          });
         } else {
           setHistory(prev => [newItem, ...prev].slice(0, 50));
         }
         
       } catch (error) {
-        console.error(error);
-        setQueue(prev => prev.map((f, idx) => idx === i ? { ...f, status: 'error', statusText: 'Failed' } : f));
+        console.error('Enhancement error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed';
+        setQueue(prev => prev.map((f, idx) => idx === i ? { 
+          ...f, 
+          status: 'error', 
+          statusText: errorMessage.length > 20 ? 'Error' : errorMessage 
+        } : f));
       }
     }
     
@@ -588,22 +597,39 @@ function AppContent() {
   const handleDownloadAll = async () => {
     for (const qFile of queue) {
       if (qFile.enhancedUrl) {
-        const response = await fetch(qFile.enhancedUrl);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        let downloadName = `lumina-enhanced-${qFile.file.name}`;
-        if (qFile.type === 'video') {
-          downloadName = downloadName.replace(/\.[^/.]+$/, ".mp4");
+        try {
+          let url = qFile.enhancedUrl;
+          let isObjectUrl = false;
+          
+          // If it's not a data URL, we need to fetch it to create a blob for download
+          if (!qFile.enhancedUrl.startsWith('data:')) {
+            const response = await fetch(qFile.enhancedUrl);
+            const blob = await response.blob();
+            url = window.URL.createObjectURL(blob);
+            isObjectUrl = true;
+          }
+          
+          const a = document.createElement('a');
+          a.href = url;
+          
+          let downloadName = `lumina-enhanced-${qFile.file.name}`;
+          if (qFile.type === 'video') {
+            downloadName = downloadName.replace(/\.[^/.]+$/, ".mp4");
+          }
+          
+          a.download = downloadName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          
+          if (isObjectUrl) {
+            window.URL.revokeObjectURL(url);
+          }
+          
+          await new Promise(r => setTimeout(r, 200));
+        } catch (error) {
+          console.error('Download failed for', qFile.file.name, error);
         }
-        
-        a.download = downloadName;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        await new Promise(r => setTimeout(r, 200));
       }
     }
   };
