@@ -549,6 +549,26 @@ function AppContent() {
     }
   };
 
+  const getErrorMessage = (error: unknown): string => {
+    if (!(error instanceof Error)) return 'Unknown error';
+    const msg = error.message.toLowerCase();
+    
+    if (msg.includes('413') || msg.includes('too large')) return 'Image too large (>4.5MB)';
+    if (msg.includes('504') || msg.includes('timeout')) return 'Server timeout (10s limit)';
+    if (msg.includes('500')) return 'Internal server error';
+    if (msg.includes('401')) return 'Authentication required';
+    if (msg.includes('403')) return 'Access denied';
+    if (msg.includes('429')) return 'Too many requests';
+    if (msg.includes('400')) return 'Invalid image data';
+    if (msg.includes('502') || msg.includes('503')) return 'Server overloaded';
+    if (msg.includes('network error') || msg.includes('failed to fetch')) return 'Network connection lost';
+    if (msg.includes('quota')) return 'Daily limit reached';
+    if (msg.includes('aborted')) return 'Request cancelled';
+    if (msg.includes('format') || msg.includes('type')) return 'Unsupported format';
+    
+    return error.message.length > 30 ? error.message.substring(0, 27) + '...' : error.message;
+  };
+
   const handleEnhanceAll = async () => {
     if (queue.length === 0) return;
 
@@ -628,11 +648,12 @@ function AppContent() {
         
       } catch (error) {
         console.error('Enhancement error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Failed';
+        const errorMessage = getErrorMessage(error);
+        
         setQueue(prev => prev.map((f, idx) => idx === i ? { 
           ...f, 
           status: 'error', 
-          statusText: errorMessage.length > 20 ? 'Error' : errorMessage 
+          statusText: errorMessage
         } : f));
       }
     }
@@ -747,7 +768,7 @@ function AppContent() {
           <div className="w-10 h-10 bg-gradient-to-br from-brand-primary to-brand-secondary rounded-xl flex items-center justify-center shadow-lg shadow-brand-primary/20 group-hover:shadow-brand-primary/40 transition-all duration-300">
             <Sparkles className="text-black w-6 h-6 group-hover:rotate-12 transition-transform" />
           </div>
-          <span className="text-xl font-bold tracking-tighter neon-text group-hover:text-white transition-colors">LUMINA AI</span>
+          <span className="text-xl font-bold tracking-tighter neon-text group-hover:text-white transition-colors">TALHA AI</span>
         </motion.div>
 
         {/* Navigation Links */}
@@ -999,7 +1020,7 @@ function AppContent() {
                 <div className="flex justify-between items-end mb-12">
                   <div className="text-left">
                     <h2 className="text-3xl font-bold tracking-tight">STUNNING RESULTS</h2>
-                    <p className="text-white/40 mt-2">See what Lumina AI can do for your photos.</p>
+                    <p className="text-white/40 mt-2">See what Talha's AI Image Enhancer can do for your photos.</p>
                   </div>
                   <motion.button 
                     whileHover={{ x: 5 }}
@@ -1052,7 +1073,7 @@ function AppContent() {
                   >
                     <h2 className="text-4xl font-black tracking-tighter mb-6">REDEFINING <span className="text-brand-primary">CLARITY.</span></h2>
                     <p className="text-lg text-white/60 mb-8 leading-relaxed">
-                      Lumina AI was founded on the principle that every memory deserves to be seen in its best light. Our proprietary neural networks analyze millions of image patterns to reconstruct lost details, remove noise, and enhance resolution with unprecedented accuracy.
+                      Talha's AI Image Enhancer was founded on the principle that every memory deserves to be seen in its best light. Our proprietary neural networks analyze millions of image patterns to reconstruct lost details, remove noise, and enhance resolution with unprecedented accuracy.
                     </p>
                     <div className="space-y-4">
                       {[
@@ -1242,13 +1263,22 @@ function AppContent() {
                           </div>
                         )}
                         {qFile.status === 'error' && (
-                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                            <AlertCircle className="w-6 h-6 text-red-400" />
+                          <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-1">
+                            <AlertCircle className="w-5 h-5 text-red-400 mb-1" />
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEnhanceAll();
+                              }}
+                              className="text-[8px] font-black bg-white text-black px-1.5 py-0.5 rounded-md hover:bg-brand-primary transition-colors"
+                            >
+                              RETRY
+                            </button>
                           </div>
                         )}
                       </button>
                       <div className="text-xs text-white/80 mt-1 truncate w-20 font-medium">{qFile.userName}</div>
-                      <div className="text-[10px] text-white/50 truncate w-20">{qFile.statusText || qFile.status}</div>
+                      <div className="text-[10px] text-white/50 truncate w-20" title={qFile.statusText || qFile.status}>{qFile.statusText || qFile.status}</div>
                       
                       {qFile.status !== 'processing' && (
                         <button
@@ -1518,7 +1548,7 @@ function AppContent() {
                               try {
                                 if (navigator.share) {
                                   await navigator.share({
-                                    title: 'Enhanced with Lumina AI',
+                                    title: 'Enhanced with Talha AI',
                                     text: 'Check out this amazing enhancement!',
                                     url: activeFile.enhancedUrl.startsWith('data:') ? window.location.href : activeFile.enhancedUrl
                                   });
@@ -1752,7 +1782,7 @@ function AppContent() {
             <a href="#" className="hover:text-white transition-colors">API Docs</a>
             <a href="#" className="hover:text-white transition-colors">Support</a>
           </div>
-          <p className="text-xs text-white/20">© 2026 Lumina AI. All rights reserved.</p>
+          <p className="text-xs text-white/20">© 2026 Talha AI. All rights reserved.</p>
         </div>
       </footer>
 
