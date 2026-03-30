@@ -18,28 +18,42 @@ async function processImagePipeline(inputPath: string, outputPath: string, mode:
     throw new Error(`Input file not found: ${inputPath}`);
   }
 
-  const metadata = await sharp(inputPath).metadata();
+  const imageBuffer = fs.readFileSync(inputPath);
+  const metadata = await sharp(imageBuffer).metadata();
   console.log(`Metadata: ${JSON.stringify(metadata)}`);
   
-  let pipeline = sharp(inputPath);
+  let recommendations: string[] = [];
+  let pipeline = sharp(imageBuffer);
 
   const currentWidth = metadata.width || 1000;
+  const currentHeight = metadata.height || 1000;
   let targetWidth = currentWidth;
-  if (currentWidth < 800) {
-    targetWidth = currentWidth * 2;
+  
+  // Enhanced upscaling logic with safety caps
+  if (mode === 'ultra_hd') {
+    // 4x Upscale for Ultra HD, but cap at 8000px to prevent memory/Sharp failures
+    targetWidth = Math.min(currentWidth * 4, 8000);
+    if (targetWidth > currentWidth) {
+      recommendations.push(`Applying AI Super-Resolution upscaling to ${targetWidth}px.`);
+    }
+  } else if (currentWidth < 1200) {
+    targetWidth = Math.min(currentWidth * 2, 2400); // 2x Upscale for small images
+    recommendations.push("Applying 2x AI upscaling for better detail.");
   }
   
   pipeline = pipeline
     .flatten({ background: { r: 255, g: 255, b: 255 } })
-    .toColorspace('srgb')
-    .toFormat('jpeg', { quality: 100 });
+    .toColorspace('srgb');
     
-  if (targetWidth !== currentWidth) {
-    pipeline = pipeline.resize({ width: targetWidth, kernel: sharp.kernel.lanczos3 });
+  if (targetWidth > currentWidth) {
+    pipeline = pipeline.resize({ 
+      width: targetWidth, 
+      kernel: sharp.kernel.lanczos3,
+      withoutEnlargement: false 
+    });
   }
 
-  let recommendations: string[] = [];
-  const stats = await sharp(inputPath).stats();
+  const stats = await sharp(imageBuffer).stats();
   console.log(`Stats: ${JSON.stringify(stats)}`);
   
   if (!stats.channels || stats.channels.length === 0) {
@@ -225,9 +239,16 @@ async function processImagePipeline(inputPath: string, outputPath: string, mode:
 
   const ext = path.extname(outputPath).toLowerCase();
   if (ext === '.jpg' || ext === '.jpeg') {
-    await pipeline.toFormat('jpeg', { quality: 95 }).toFile(outputPath);
+    await pipeline.toFormat('jpeg', { 
+      quality: 100, 
+      chromaSubsampling: '4:4:4',
+      force: true 
+    }).toFile(outputPath);
   } else {
-    await pipeline.toFormat('png').toFile(outputPath);
+    await pipeline.toFormat('png', { 
+      compressionLevel: 0, // No compression for PNG if requested
+      force: true 
+    }).toFile(outputPath);
   }
   return { recommendations, metadata };
 }
@@ -290,12 +311,27 @@ async function startServer() {
   app.use('/outputs', express.static(outputsDir));
 
   // API Routes
-  app.post("/api/enhance", upload.single('image'), async (req, res) => {
+  app.post("/api/enhance", (req, res, next) => {
+    upload.single('image')(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ 
+            success: false, 
+            message: 'Image too large. Maximum size is 30MB (Vercel limit may be lower, around 4.5MB).' 
+          });
+        }
+        return res.status(400).json({ success: false, message: `Upload error: ${err.message}` });
+      } else if (err) {
+        return res.status(500).json({ success: false, message: `Unknown upload error: ${err.message}` });
+      }
+      next();
+    });
+  }, async (req, res) => {
     console.log(`Received enhancement request: ${req.file?.originalname} (${req.file?.mimetype})`);
     try {
       if (!req.file) {
         console.error("No image uploaded in request");
-        return res.status(400).json({ error: "No image uploaded" });
+        return res.status(400).json({ success: false, message: "No image uploaded" });
       }
 
       const { 
@@ -404,6 +440,30 @@ async function startServer() {
   // Health check
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Catch-all for /api routes to ensure they return JSON instead of HTML
+  app.all("/api/*", (req, res) => {
+    console.log(`API 404: ${req.method} ${req.url}`);
+    res.status(404).json({ 
+      success: false, 
+      message: `API route not found: ${req.method} ${req.url}. Ensure you are using the correct method and path.`,
+      path: req.url,
+      method: req.method
+    });
+  });
+
+  // Global Error Handler for API
+  app.use("/api/*", (err: any, req: any, res: any, next: any) => {
+    console.error("Global API Error:", err);
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message || "Internal Server Error",
+      error: process.env.NODE_ENV === "development" ? {
+        message: err.message,
+        stack: err.stack
+      } : undefined
+    });
   });
 
   // Vite middleware for development

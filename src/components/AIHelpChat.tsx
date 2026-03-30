@@ -9,8 +9,8 @@ interface Message {
   text: string;
 }
 
-const SYSTEM_INSTRUCTION = `You are Lumina AI Support, a helpful and friendly AI assistant for the Lumina AI website.
-Lumina AI is a professional image and video enhancement platform.
+const SYSTEM_INSTRUCTION = `You are TALHA AI Support, a helpful and friendly AI assistant for the TALHA AI website.
+TALHA AI is a professional image and video enhancement platform.
 The main headline is "ENHANCE YOUR DIGITAL MEMORIES."
 
 Key Features & How-To:
@@ -41,7 +41,7 @@ export const AIHelpChat = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'model', text: "Hello! I'm Lumina AI Support. How can I help you enhance your memories today?" }
+    { role: 'model', text: "Hello! I'm TALHA AI Support. How can I help you enhance your memories today?" }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -102,7 +102,7 @@ export const AIHelpChat = () => {
                   <Sparkles className="w-5 h-5 text-black" />
                 </div>
                 <div>
-                  <div className="text-sm font-bold tracking-tight">LUMINA SUPPORT</div>
+                  <div className="text-sm font-bold tracking-tight">TALHA AI SUPPORT</div>
                   <div className="text-[10px] text-brand-primary font-bold uppercase tracking-widest">AI Assistant</div>
                 </div>
               </div>
@@ -180,7 +180,7 @@ export const AIHelpChat = () => {
 
       {/* Toggle Button */}
       <motion.button
-        whileHover={{ scale: 1.05 }}
+        whileHover={{ scale: 1.1, backgroundColor: isOpen ? '#ffffff' : '#00b8c4' }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
         className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-2xl transition-all duration-300 ${

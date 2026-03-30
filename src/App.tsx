@@ -29,17 +29,23 @@ import {
   Palette,
   Loader2,
   X,
+  Check,
   Search,
+  Menu,
   Linkedin,
   Mail,
   MessageSquare,
   Volume2,
   VolumeX,
   Trash2,
+  ArrowUpRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AIHelpChat } from './components/AIHelpChat';
 import { AuthModal } from './components/AuthModal';
+import { ShowcaseItem } from './components/ShowcaseItem';
+import { FAQItem } from './components/FAQItem';
+import { HistoryItemCard } from './components/HistoryItemCard';
 import { voiceService } from './services/voiceService';
 import { 
   auth, 
@@ -196,19 +202,19 @@ const ComparisonSlider = ({ before, after }: { before: string; after: string }) 
   return (
     <div 
       ref={containerRef}
-      className="relative w-full aspect-video rounded-2xl overflow-hidden cursor-ew-resize select-none border border-white/10 group"
+      className="relative w-full h-full min-h-[400px] md:min-h-[500px] rounded-2xl overflow-hidden cursor-ew-resize select-none border border-white/10 group bg-black/40"
       onMouseDown={handleMouseDown}
       onTouchStart={handleMouseDown}
     >
       {/* After Media (Full background) */}
-      <img src={after} alt="Enhanced" className="absolute inset-0 w-full h-full object-cover" />
+      <img src={after} alt="Enhanced" className="absolute inset-0 w-full h-full object-contain" />
       
       {/* Before Media (Clipped) */}
       <div 
         className="absolute inset-0 w-full h-full overflow-hidden"
         style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
       >
-        <img src={before} alt="Original" className="absolute inset-0 w-full h-full object-cover" />
+        <img src={before} alt="Original" className="absolute inset-0 w-full h-full object-contain" />
       </div>
 
       {/* Handle */}
@@ -254,33 +260,35 @@ const ComparisonSlider = ({ before, after }: { before: string; after: string }) 
 
 const ModeCard: React.FC<{ mode: EnhancementMode; selected: boolean; onSelect: () => void }> = ({ mode, selected, onSelect }) => (
   <motion.button
-    whileHover={{ scale: 1.02, y: -2 }}
+    whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 255, 255, 0.08)' }}
     whileTap={{ scale: 0.98 }}
     onClick={onSelect}
-    className={`relative flex flex-col items-start p-5 rounded-3xl text-left transition-all duration-500 border ${
+    className={`relative flex items-center gap-3 p-3 rounded-xl text-left transition-all duration-300 border ${
       selected 
-        ? 'bg-brand-primary/20 border-brand-primary shadow-[0_0_30px_rgba(0,242,255,0.2)] ring-1 ring-brand-primary/30' 
-        : 'bg-white/2 border-white/5 hover:bg-white/5 hover:border-white/10'
+        ? 'bg-brand-primary/15 border-brand-primary/50 shadow-[0_0_20px_rgba(0,242,255,0.1)]' 
+        : 'bg-white/2 border-white/5 hover:border-white/20'
     }`}
   >
-    <div className={`p-3 rounded-2xl mb-4 transition-all duration-500 ${selected ? 'bg-brand-primary text-black scale-110 rotate-3' : 'bg-white/5 text-white/40'}`}>
-      {React.isValidElement(mode.icon) && React.cloneElement(mode.icon as React.ReactElement<any>, { className: 'w-5 h-5' })}
+    <div className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center transition-all duration-300 ${selected ? 'bg-brand-primary text-black' : 'bg-white/5 text-white/40'}`}>
+      {React.isValidElement(mode.icon) && React.cloneElement(mode.icon as React.ReactElement<any>, { className: 'w-4 h-4' })}
     </div>
-    <h3 className={`font-black text-sm mb-1 uppercase tracking-wider transition-colors ${selected ? 'text-brand-primary' : 'text-white/80'}`}>
-      {mode.name}
-    </h3>
-    <p className="text-[11px] text-white/40 leading-relaxed font-medium">
-      {mode.description}
-    </p>
+    <div className="min-w-0 flex-1">
+      <h3 className={`font-bold text-[10px] uppercase tracking-wider truncate ${selected ? 'text-brand-primary' : 'text-white/90'}`}>
+        {mode.name}
+      </h3>
+      <p className="text-[9px] text-white/30 truncate">
+        {mode.description}
+      </p>
+    </div>
     {mode.premium && (
-      <div className={`absolute top-4 right-4 p-1 rounded-lg ${selected ? 'bg-brand-primary/20' : 'bg-white/5'}`}>
-        <Zap className={`w-3 h-3 ${selected ? 'text-brand-primary fill-brand-primary' : 'text-yellow-400/50'}`} />
+      <div className="absolute top-1.5 right-1.5">
+        <Zap className={`w-2 h-2 ${selected ? 'text-brand-primary fill-brand-primary' : 'text-yellow-400/30'}`} />
       </div>
     )}
     {selected && (
       <motion.div 
         layoutId="active-mode-indicator"
-        className="absolute -left-1 top-1/2 -translate-y-1/2 w-1 h-8 bg-brand-primary rounded-full shadow-[0_0_15px_rgba(0,242,255,1)]"
+        className="absolute -left-px top-1/2 -translate-y-1/2 w-0.5 h-4 bg-brand-primary rounded-full"
       />
     )}
   </motion.button>
@@ -344,6 +352,9 @@ const PolicyModal = ({ type, onClose }: { type: 'privacy' | 'terms', onClose: ()
   );
 };
 
+
+// --- Main App Component ---
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -369,6 +380,7 @@ function AppContent() {
   const [showHistory, setShowHistory] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isMuted, setIsMuted] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activePolicy, setActivePolicy] = useState<'privacy' | 'terms' | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -447,7 +459,9 @@ function AppContent() {
   const handleDownloadHistoryItem = (item: HistoryItem) => {
     const link = document.createElement('a');
     link.href = item.enhanced;
-    link.download = `lumina-${item.mode}-${Date.now()}.png`;
+    // Use .jpg as the server saves in high-quality JPEG by default
+    const extension = item.enhanced.startsWith('data:image/png') ? 'png' : 'jpg';
+    link.download = `talha-ai-${item.mode}-${Date.now()}.${extension}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -480,12 +494,12 @@ function AppContent() {
 
   // --- Effects ---
   useEffect(() => {
-    const savedHistory = localStorage.getItem('lumina_history');
+    const savedHistory = localStorage.getItem('talha_ai_history');
     if (savedHistory) setHistory(JSON.parse(savedHistory));
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('lumina_history', JSON.stringify(history));
+    localStorage.setItem('talha_ai_history', JSON.stringify(history));
   }, [history]);
 
   useEffect(() => {
@@ -497,12 +511,15 @@ function AppContent() {
       voiceService.welcome();
       window.removeEventListener('click', handleFirstInteraction);
       window.removeEventListener('keydown', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
     };
     window.addEventListener('click', handleFirstInteraction);
     window.addEventListener('keydown', handleFirstInteraction);
+    window.addEventListener('touchstart', handleFirstInteraction);
     return () => {
       window.removeEventListener('click', handleFirstInteraction);
       window.removeEventListener('keydown', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
     };
   }, []);
 
@@ -518,6 +535,12 @@ function AppContent() {
       f.type.startsWith('image/') && 
       f.size <= 30 * 1024 * 1024
     );
+    
+    const tooLargeFiles = Array.from(files).filter(f => f.size > 4.5 * 1024 * 1024);
+    if (tooLargeFiles.length > 0) {
+      console.warn('Some files are over 4.5MB. Vercel deployments may fail to process these.');
+    }
+
     if (newFiles.length === 0) {
       alert('Please upload valid image files (JPG, PNG) under 30MB');
       return;
@@ -604,13 +627,44 @@ function AppContent() {
         const response = await fetch('/api/enhance', {
           method: 'POST',
           body: formData,
+          headers: {
+            'Accept': 'application/json',
+          },
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => null);
+          let errorData;
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            errorData = await response.json().catch(() => null);
+          } else {
+            const text = await response.text().catch(() => '');
+            console.error('Non-JSON error response:', text);
+            
+            if (text.includes('Cookie check') || text.includes('Action required to load your app')) {
+              errorData = { 
+                message: 'Browser security settings are blocking the enhancement process. Please click the "Open in new tab" button at the top right of the preview or enable third-party cookies in your browser settings.' 
+              };
+            } else {
+              errorData = { message: `Server error (${response.status}): ${response.statusText}` };
+            }
+          }
+          
           console.error('Server error details:', errorData);
           const errorMessage = errorData?.message || errorData?.details || 'Enhancement failed';
           throw new Error(errorMessage);
+        }
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text().catch(() => '');
+          console.error('Unexpected non-JSON response:', text);
+          
+          if (text.includes('Cookie check') || text.includes('Action required to load your app')) {
+            throw new Error('Browser security settings are blocking the enhancement process. Please click the "Open in new tab" button at the top right of the preview or enable third-party cookies in your browser settings.');
+          }
+          
+          throw new Error('Server returned an invalid response format (HTML instead of JSON). This usually happens when a route is not found or the server crashes.');
         }
 
         const data = await response.json();
@@ -670,7 +724,6 @@ function AppContent() {
           let url = qFile.enhancedUrl;
           let isObjectUrl = false;
           
-          // If it's not a data URL, we need to fetch it to create a blob for download
           if (!qFile.enhancedUrl.startsWith('data:')) {
             const response = await fetch(qFile.enhancedUrl);
             const blob = await response.blob();
@@ -681,7 +734,10 @@ function AppContent() {
           const a = document.createElement('a');
           a.href = url;
           
-          let downloadName = `lumina-enhanced-${qFile.file.name}`;
+          // Ensure the extension is .jpg as the server saves in high-quality JPEG
+          let baseName = qFile.file.name.split('.').slice(0, -1).join('.');
+          if (!baseName) baseName = qFile.file.name;
+          let downloadName = `talha-ai-enhanced-${baseName}.jpg`;
           
           a.download = downloadName;
           document.body.appendChild(a);
@@ -712,53 +768,13 @@ function AppContent() {
     <div className="min-h-screen font-sans selection:bg-brand-primary/30">
       {/* Background Glows */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        {/* Noise Texture */}
-        <div className="absolute inset-0 opacity-[0.03] mix-blend-overlay" style={{ backgroundImage: 'url("https://grainy-gradients.vercel.app/noise.svg")' }} />
-        
-        <motion.div 
-          animate={{ 
-            scale: [1, 1.2, 1],
-            opacity: [0.15, 0.25, 0.15],
-            x: [0, 50, 0],
-            y: [0, -30, 0]
-          }}
-          transition={{ 
-            duration: 12,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-          className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-primary/20 blur-[140px] rounded-full" 
-        />
-        <motion.div 
-          animate={{ 
-            scale: [1.2, 1, 1.2],
-            opacity: [0.15, 0.25, 0.15],
-            x: [0, -50, 0],
-            y: [0, 30, 0]
-          }}
-          transition={{ 
-            duration: 15,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-          className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-secondary/20 blur-[140px] rounded-full" 
-        />
-        <motion.div 
-          animate={{ 
-            opacity: [0.05, 0.1, 0.05],
-            scale: [0.8, 1.1, 0.8],
-          }}
-          transition={{ 
-            duration: 20,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] bg-white/5 blur-[160px] rounded-full" 
-        />
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-primary/10 blur-[120px] rounded-full opacity-50" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-secondary/10 blur-[120px] rounded-full opacity-50" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] bg-white/2 blur-[140px] rounded-full opacity-30" />
       </div>
 
       {/* Header */}
-      <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex justify-between items-center glass-dark border-b border-white/5 backdrop-blur-xl">
+      <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-3 md:py-4 flex justify-between items-center glass-dark border-b border-white/5 backdrop-blur-xl">
         <motion.div 
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -821,8 +837,10 @@ function AppContent() {
               SEARCH
             </motion.button>
           </motion.div>
-
-          {/* Volume Toggle */}
+        </div>
+        
+        <div className="flex items-center gap-4">
+          {/* Volume Toggle - Always visible */}
           <motion.button
             whileHover={{ scale: 1.1, backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
             whileTap={{ scale: 0.9 }}
@@ -838,9 +856,7 @@ function AppContent() {
           >
             {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </motion.button>
-        </div>
-        
-        <div className="flex items-center gap-4">
+
           <motion.button 
             whileHover={{ scale: 1.1, backgroundColor: 'rgba(255, 255, 255, 0.15)' }}
             whileTap={{ scale: 0.9 }}
@@ -881,13 +897,72 @@ function AppContent() {
               className="px-6 py-2 bg-white text-black text-sm font-black rounded-full hover:bg-brand-primary transition-all duration-300 flex items-center gap-2"
             >
               <UserIcon className="w-4 h-4" />
-              SIGN IN
+              <span className="hidden sm:inline">SIGN IN</span>
             </motion.button>
           )}
+
+          {/* Mobile Menu Toggle */}
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="md:hidden p-2 rounded-xl bg-white/5 border border-white/10 text-white"
+          >
+            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </motion.button>
         </div>
+
+        {/* Mobile Menu Overlay */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, x: '100%' }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-2xl md:hidden flex flex-col p-8 pt-24"
+            >
+              <div className="flex flex-col gap-6">
+                {[
+                  { label: 'Home', icon: <Home className="w-5 h-5" />, action: () => { setStep('intro'); window.scrollTo({ top: 0, behavior: 'smooth' }); setIsMobileMenuOpen(false); } },
+                  { label: 'About', icon: <Info className="w-5 h-5" />, action: () => { scrollToSection(aboutRef); setIsMobileMenuOpen(false); } },
+                  { label: 'Help', icon: <HelpCircle className="w-5 h-5" />, action: () => { scrollToSection(helpRef); setIsMobileMenuOpen(false); } },
+                  { label: 'Contact', icon: <UserIcon className="w-5 h-5" />, action: () => { scrollToSection(contactRef); setIsMobileMenuOpen(false); } },
+                  { label: 'Showcase', icon: <ImageIcon className="w-5 h-5" />, action: () => { scrollToSection(showcaseRef); setIsMobileMenuOpen(false); } },
+                ].map((link, i) => (
+                  <motion.button
+                    key={i}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    onClick={link.action}
+                    className="flex items-center gap-4 text-2xl font-black text-white/70 hover:text-brand-primary transition-colors text-left"
+                  >
+                    <span className="p-2 rounded-xl bg-white/5 text-brand-primary">
+                      {link.icon}
+                    </span>
+                    {link.label.toUpperCase()}
+                  </motion.button>
+                ))}
+              </div>
+
+              <div className="mt-auto pt-8 border-t border-white/10 flex flex-col gap-6">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40" />
+                  <input 
+                    type="text"
+                    placeholder="Search features..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-white/20 focus:outline-none focus:border-brand-primary/50"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </nav>
 
-      <main className="relative z-10 pt-24 pb-12 px-6 max-w-7xl mx-auto">
+      <main className="relative z-10 pt-24 md:pt-32 pb-12 px-6 max-w-7xl mx-auto will-change-transform">
         <AnimatePresence mode="wait">
           {step === 'intro' && (
             <motion.div
@@ -895,27 +970,32 @@ function AppContent() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="flex flex-col items-center text-center py-20"
+              className="flex flex-col items-center text-center py-4 md:py-12"
             >
               <motion.div
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.1 }}
-                className="mb-4 flex items-center gap-2 px-3 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-[10px] font-black tracking-[0.2em] text-brand-primary uppercase"
+                transition={{ delay: 0.1, duration: 0.5 }}
+                className="mb-2 md:mb-3 flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-[9px] font-bold tracking-[0.2em] text-brand-primary uppercase"
               >
                 <Smile className="w-3 h-3" />
-                {user ? `Welcome, ${user.displayName || user.email}` : 'Talha welcomes you'}
+                {user ? `Welcome back, ${user.displayName || user.email}` : 'Professional AI Enhancement'}
               </motion.div>
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 whileHover={{ scale: 1.1, y: -5 }}
-                transition={{ delay: 0.2 }}
-                className="mb-6 px-4 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-bold tracking-widest text-brand-primary uppercase cursor-default shadow-sm hover:shadow-brand-primary/20 transition-all"
+                transition={{ delay: 0.2, duration: 0.5 }}
+                className="mb-3 md:mb-5 px-3 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-medium tracking-widest text-brand-primary uppercase cursor-default shadow-sm hover:shadow-brand-primary/20 transition-all"
               >
                 Next-Gen Image Processing
               </motion.div>
-              <h1 className="text-5xl md:text-7xl font-black tracking-tighter mb-8 leading-[0.9] uppercase">
+              <motion.h1 
+                initial={{ y: 30, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.3, duration: 0.6 }}
+                className="text-3xl md:text-6xl font-black tracking-tighter mb-4 md:mb-6 leading-[0.9] uppercase"
+              >
                 ENHANCE YOUR <br />
                 <motion.span 
                   whileHover={{ scale: 1.05, rotate: 1 }}
@@ -923,39 +1003,55 @@ function AppContent() {
                 >
                   DIGITAL MEMORIES.
                 </motion.span>
-              </h1>
-              <p className="text-lg md:text-xl text-white/60 max-w-2xl mb-12 leading-relaxed">
+              </motion.h1>
+              <motion.p 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.4, duration: 0.5 }}
+                className="text-sm md:text-lg text-white/60 max-w-xl mb-6 md:mb-10 leading-relaxed"
+              >
                 Professional AI image enhancement in seconds. Upscale, sharpen, and restore your photos with DSLR-level quality.
-              </p>
+              </motion.p>
               
-                <div className="flex flex-col items-center gap-6">
+                <motion.div 
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.5, duration: 0.5 }}
+                  className="flex flex-col items-center gap-6"
+                >
                   <div className="flex flex-col md:flex-row gap-4">
                     <motion.button 
-                      whileHover={{ scale: 1.05, rotate: -1, boxShadow: '0 0 40px rgba(0, 242, 255, 0.5)' }}
+                      whileHover={{ scale: 1.05, backgroundColor: '#00b8c4', boxShadow: '0 0 25px rgba(0, 242, 255, 0.4)' }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => {
                         if (!user) setIsAuthModalOpen(true);
                         else if (queue.length > 0) setStep('upload');
                         else fileInputRef.current?.click();
                       }}
-                      className="group relative px-10 py-5 bg-brand-primary text-black font-black rounded-2xl flex items-center gap-3 transition-all duration-300 shadow-[0_0_30px_rgba(0,242,255,0.3)]"
+                      className="group relative px-6 py-2.5 bg-brand-primary text-black text-sm font-bold rounded-lg flex items-center gap-2 transition-all duration-300 shadow-[0_0_15px_rgba(0,242,255,0.15)]"
                     >
-                      {user ? 'GET STARTED FREE' : 'CREATE ACCOUNT'}
-                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      {user ? 'CLICK TO ENHANCE YOUR PHOTO' : 'SIGN UP TO ENHANCE PHOTO'}
+                      <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </motion.button>
                     <motion.button 
                       whileHover={{ scale: 1.05, backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => scrollToSection(showcaseRef)}
-                      className="px-10 py-5 bg-white/5 border border-white/10 text-white font-bold rounded-2xl transition-all"
+                      className="px-6 py-2.5 bg-white/5 border border-white/10 text-white text-sm font-bold rounded-lg transition-all"
                     >
                       VIEW SHOWCASE
                     </motion.button>
                   </div>
-                </div>
+                </motion.div>
 
               {/* Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-24 w-full max-w-4xl">
+              <motion.div 
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.7 }}
+                className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-12 md:mt-16 w-full max-w-4xl"
+              >
                 {[
                   { label: 'Users Worldwide', value: '2M+' },
                   { label: 'Images Enhanced', value: '50M+' },
@@ -964,6 +1060,10 @@ function AppContent() {
                 ].map((stat, i) => (
                   <motion.div 
                     key={i} 
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1, duration: 0.5 }}
                     whileHover={{ scale: 1.1, y: -10 }}
                     className="text-center p-6 rounded-3xl bg-white/0 hover:bg-white/5 border border-transparent hover:border-white/10 transition-all duration-500 group"
                   >
@@ -971,10 +1071,16 @@ function AppContent() {
                     <div className="text-xs text-white/40 uppercase tracking-widest font-bold">{stat.label}</div>
                   </motion.div>
                 ))}
-              </div>
+              </motion.div>
 
               {/* Features Section */}
-              <div className="mt-32 w-full max-w-6xl">
+              <motion.div 
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.8 }}
+                className="mt-16 md:mt-20 w-full max-w-6xl"
+              >
                 <h2 className="text-3xl font-bold mb-12 tracking-tight">POWERED BY ADVANCED AI</h2>
                 <div className="grid md:grid-cols-3 gap-6">
                   {[
@@ -996,6 +1102,10 @@ function AppContent() {
                   ].map((feature, i) => (
                     <motion.div
                       key={i}
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.15, duration: 0.6 }}
                       whileHover={{ 
                         y: -15, 
                         scale: 1.02,
@@ -1013,10 +1123,17 @@ function AppContent() {
                     </motion.div>
                   ))}
                 </div>
-              </div>
+              </motion.div>
 
               {/* Showcase Section */}
-              <div ref={showcaseRef} className="mt-32 w-full max-w-6xl pb-20 scroll-mt-32">
+              <motion.div 
+                ref={showcaseRef} 
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.8 }}
+                className="mt-16 md:mt-20 w-full max-w-6xl pb-12 scroll-mt-32"
+              >
                 <div className="flex justify-between items-end mb-12">
                   <div className="text-left">
                     <h2 className="text-3xl font-bold tracking-tight">STUNNING RESULTS</h2>
@@ -1039,36 +1156,26 @@ function AppContent() {
                     { seed: 'night', label: 'Low Light' },
                     { seed: 'macro', label: 'Macro' },
                   ].map((item, i) => (
-                    <motion.div
-                      key={i}
-                      whileHover={{ scale: 1.03 }}
-                      className="relative aspect-[4/3] rounded-3xl overflow-hidden group cursor-pointer"
-                    >
-                      <img 
-                        src={`https://picsum.photos/seed/${item.seed}/800/600`} 
-                        alt={item.label}
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-8 text-left">
-                        <div className="text-brand-primary font-bold text-xs tracking-widest uppercase mb-1">Enhanced</div>
-                        <div className="text-xl font-bold text-white">{item.label}</div>
-                      </div>
-                      <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-[10px] font-bold text-white/70 uppercase tracking-widest">
-                        Before / After
-                      </div>
-                    </motion.div>
+                    <ShowcaseItem key={i} seed={item.seed} label={item.label} index={i} />
                   ))}
                 </div>
-              </div>
+              </motion.div>
 
               {/* About Section */}
-              <div ref={aboutRef} className="mt-32 w-full max-w-6xl scroll-mt-32">
+              <motion.div 
+                ref={aboutRef} 
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.8 }}
+                className="mt-16 md:mt-24 w-full max-w-6xl scroll-mt-32"
+              >
                 <div className="grid md:grid-cols-2 gap-16 items-center">
                   <motion.div 
-                    initial={{ opacity: 0, x: -50 }}
+                    initial={{ opacity: 0, x: -30 }}
                     whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
+                    transition={{ delay: 0.2, duration: 0.6 }}
                     className="text-left"
                   >
                     <h2 className="text-4xl font-black tracking-tighter mb-6">REDEFINING <span className="text-brand-primary">CLARITY.</span></h2>
@@ -1090,9 +1197,10 @@ function AppContent() {
                     </div>
                   </motion.div>
                   <motion.div 
-                    initial={{ opacity: 0, x: 50 }}
+                    initial={{ opacity: 0, x: 30 }}
                     whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
+                    transition={{ delay: 0.4, duration: 0.6 }}
                     className="relative"
                   >
                     <div className="aspect-square rounded-3xl overflow-hidden border border-white/10 shadow-2xl shadow-brand-primary/10">
@@ -1106,10 +1214,17 @@ function AppContent() {
                     <div className="absolute -bottom-6 -right-6 w-48 h-48 bg-brand-secondary/20 blur-3xl rounded-full" />
                   </motion.div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Help Section */}
-              <div ref={helpRef} className="mt-32 w-full max-w-4xl scroll-mt-32 pb-32">
+              <motion.div 
+                ref={helpRef} 
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.8 }}
+                className="mt-16 md:mt-24 w-full max-w-4xl scroll-mt-32 pb-16 md:pb-24"
+              >
                 <h2 className="text-3xl font-bold mb-12 tracking-tight">FREQUENTLY ASKED QUESTIONS</h2>
                 <div className="space-y-4">
                   {[
@@ -1118,66 +1233,77 @@ function AppContent() {
                     { q: "What file formats are supported?", a: "We support JPG, PNG, WebP for images up to 30MB." },
                     { q: "How long does processing take?", a: "Most images are enhanced in under 1 second." }
                   ].map((faq, i) => (
-                    <motion.div
-                      key={i}
-                      whileHover={{ scale: 1.01, backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
-                      className="p-6 rounded-2xl bg-white/2 border border-white/5 text-left transition-all cursor-pointer group"
-                    >
-                      <h3 className="text-lg font-bold mb-2 group-hover:text-brand-primary transition-colors flex justify-between items-center">
-                        {faq.q}
-                        <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-all" />
-                      </h3>
-                      <p className="text-white/50 text-sm leading-relaxed">{faq.a}</p>
-                    </motion.div>
+                    <FAQItem key={i} q={faq.q} a={faq.a} index={i} />
                   ))}
                 </div>
-              </div>
+              </motion.div>
 
               {/* Contact Section */}
-              <div ref={contactRef} className="mt-32 w-full max-w-4xl scroll-mt-32 pb-32">
-                <h2 className="text-3xl font-bold mb-12 tracking-tight">GET IN TOUCH</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <motion.div 
+                ref={contactRef} 
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.8 }}
+                className="mt-16 md:mt-24 w-full max-w-4xl scroll-mt-32 pb-16 md:pb-24"
+              >
+                <div className="text-center mb-16">
+                  <h2 className="text-3xl font-black tracking-tighter mb-4 uppercase">GET IN TOUCH</h2>
+                  <p className="text-white/40 max-w-lg mx-auto">Have questions or need custom solutions? Reach out to Muhammad Talha directly through any of these platforms.</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {[
                     { 
                       label: 'LinkedIn', 
-                      icon: <Linkedin className="w-6 h-6" />, 
+                      icon: <Linkedin className="w-5 h-5" />, 
                       value: 'Muhammad Talha', 
+                      sub: 'Professional Profile',
                       action: () => window.open('https://www.linkedin.com/in/muhammad-talha-6278463a1', '_blank'),
-                      color: 'hover:text-[#0077B5]'
+                      brandColor: 'group-hover:bg-[#0077B5]',
+                      textColor: 'group-hover:text-[#0077B5]'
                     },
                     { 
                       label: 'Gmail', 
-                      icon: <Mail className="w-6 h-6" />, 
+                      icon: <Mail className="w-5 h-5" />, 
                       value: 'moyih50210@gmail.com', 
+                      sub: 'Direct Email',
                       action: () => window.location.href = 'mailto:moyih50210@gmail.com',
-                      color: 'hover:text-[#EA4335]'
+                      brandColor: 'group-hover:bg-[#EA4335]',
+                      textColor: 'group-hover:text-[#EA4335]'
                     },
                     { 
                       label: 'WhatsApp', 
-                      icon: <MessageSquare className="w-6 h-6" />, 
+                      icon: <MessageSquare className="w-5 h-5" />, 
                       value: '03365026229', 
+                      sub: 'Instant Message',
                       action: () => window.open('https://wa.me/923365026229', '_blank'),
-                      color: 'hover:text-[#25D366]'
+                      brandColor: 'group-hover:bg-[#25D366]',
+                      textColor: 'group-hover:text-[#25D366]'
                     }
                   ].map((contact, i) => (
                     <motion.button
                       key={i}
-                      whileHover={{ scale: 1.05, backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
-                      whileTap={{ scale: 0.95 }}
+                      whileHover={{ y: -5 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={contact.action}
-                      className={`p-8 rounded-3xl bg-white/2 border border-white/5 flex flex-col items-center gap-4 transition-all duration-300 group ${contact.color}`}
+                      className="group relative p-6 rounded-2xl bg-white/2 border border-white/5 flex flex-col items-start text-left transition-all duration-300 hover:border-white/20 hover:bg-white/5"
                     >
-                      <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center transition-colors group-hover:bg-white/10">
+                      <div className={`w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center mb-4 transition-all duration-300 ${contact.brandColor} group-hover:text-white text-white/60`}>
                         {contact.icon}
                       </div>
-                      <div className="text-center">
-                        <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-1">{contact.label}</div>
-                        <div className="text-sm font-medium text-white/80">{contact.value}</div>
+                      <div>
+                        <div className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-1">{contact.label}</div>
+                        <div className="text-sm font-bold text-white mb-0.5 group-hover:text-white transition-colors">{contact.value}</div>
+                        <div className="text-[11px] text-white/40">{contact.sub}</div>
+                      </div>
+                      <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <ArrowUpRight className="w-4 h-4 text-white/40" />
                       </div>
                     </motion.button>
                   ))}
                 </div>
-              </div>
+              </motion.div>
             </motion.div>
           )}
 
@@ -1187,7 +1313,7 @@ function AppContent() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="grid lg:grid-cols-[1fr_400px] gap-8 items-start"
+              className="grid lg:grid-cols-[1fr_400px] gap-8 items-start relative mt-8 md:mt-12"
             >
               {/* Left: Upload/Preview Area */}
               <div className="space-y-6">
@@ -1195,7 +1321,7 @@ function AppContent() {
                   onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                   onDragLeave={() => setIsDragging(false)}
                   onDrop={onDrop}
-                  className={`relative aspect-video rounded-3xl border-2 border-dashed transition-all duration-500 flex flex-col items-center justify-center overflow-hidden ${
+                  className={`relative min-h-[400px] md:min-h-[500px] rounded-3xl border-2 border-dashed transition-all duration-500 flex flex-col items-center justify-center overflow-hidden bg-black/20 ${
                     isDragging 
                       ? 'border-brand-primary bg-brand-primary/5 scale-[1.01]' 
                       : 'border-transparent'
@@ -1245,13 +1371,23 @@ function AppContent() {
                 <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
                   {queue.map((qFile, idx) => (
                     <div key={qFile.id} className="relative shrink-0">
-                      <button
+                      <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => setActiveIndex(idx)}
-                        className={`relative w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${
-                          activeIndex === idx ? 'border-brand-primary' : 'border-white/10 hover:border-white/30'
+                        onKeyDown={(e) => e.key === 'Enter' && setActiveIndex(idx)}
+                        className={`relative w-20 h-20 rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
+                          activeIndex === idx 
+                            ? 'border-brand-primary shadow-[0_0_15px_rgba(0,242,255,0.3)] scale-[1.05] z-10' 
+                            : 'border-white/10 hover:border-white/30'
                         }`}
                       >
                         <img src={qFile.previewUrl} className="w-full h-full object-cover" />
+                        {activeIndex === idx && (
+                          <div className="absolute top-1 right-1 bg-brand-primary text-black rounded-full p-0.5 shadow-lg">
+                            <Check className="w-2 h-2 stroke-[4px]" />
+                          </div>
+                        )}
                         {qFile.status === 'processing' && (
                           <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                             <Loader2 className="w-6 h-6 text-brand-primary animate-spin" />
@@ -1270,13 +1406,13 @@ function AppContent() {
                                 e.stopPropagation();
                                 handleEnhanceAll();
                               }}
-                              className="text-[8px] font-black bg-white text-black px-1.5 py-0.5 rounded-md hover:bg-brand-primary transition-colors"
+                              className="text-[8px] font-black bg-white text-black px-1.5 py-0.5 rounded-md hover:bg-brand-primary transition-colors z-20"
                             >
                               RETRY
                             </button>
                           </div>
                         )}
-                      </button>
+                      </div>
                       <div className="text-xs text-white/80 mt-1 truncate w-20 font-medium">{qFile.userName}</div>
                       <div className="text-[10px] text-white/50 truncate w-20" title={qFile.statusText || qFile.status}>{qFile.statusText || qFile.status}</div>
                       
@@ -1355,7 +1491,7 @@ function AppContent() {
               </div>
 
               {/* Right: Controls */}
-              <div className="space-y-6">
+              <div className="space-y-6 lg:sticky lg:top-24">
                 <div className="glass p-6 rounded-3xl border border-white/10">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="font-bold flex items-center gap-2">
@@ -1365,7 +1501,7 @@ function AppContent() {
                     <span className="text-[10px] font-bold px-2 py-0.5 bg-white/10 rounded-full text-white/60">8 MODES</span>
                   </div>
                   
-                  <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
+                  <div className="grid grid-cols-2 gap-2">
                     {MODES.map((mode) => (
                       <ModeCard 
                         key={mode.id} 
@@ -1377,63 +1513,67 @@ function AppContent() {
                   </div>
 
                   {selectedMode === 'auto' && (
-                    <div className="mt-6 space-y-3">
-                      <h4 className="font-bold text-sm text-white mb-3">Auto-Mode Features</h4>
+                    <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
+                      <h4 className="font-bold text-[10px] text-white/40 uppercase tracking-widest mb-2">Auto-Mode Features</h4>
                       
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
+                      <div className="p-3 bg-white/2 border border-white/5 rounded-xl flex items-center justify-between hover:bg-white/5 transition-colors group">
                         <div>
-                          <h4 className="font-bold text-sm text-white">Face Enhancement</h4>
-                          <p className="text-xs text-white/50 mt-1">AI facial restoration</p>
+                          <h4 className="font-bold text-xs text-white/80 group-hover:text-white transition-colors">Face Enhancement</h4>
+                          <p className="text-[9px] text-white/30">AI facial restoration</p>
                         </div>
-                        <button onClick={() => setFaceEnhancement(!faceEnhancement)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${faceEnhancement ? 'bg-brand-primary' : 'bg-white/20'}`}>
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${faceEnhancement ? 'translate-x-6' : 'translate-x-1'}`} />
+                        <button onClick={() => setFaceEnhancement(!faceEnhancement)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${faceEnhancement ? 'bg-brand-primary' : 'bg-white/10'}`}>
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${faceEnhancement ? 'translate-x-5' : 'translate-x-1'}`} />
                         </button>
                       </div>
 
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
+                      <div className="p-3 bg-white/2 border border-white/5 rounded-xl flex items-center justify-between hover:bg-white/5 transition-colors group">
                         <div>
-                          <h4 className="font-bold text-sm text-white">Background Blur</h4>
-                          <p className="text-xs text-white/50 mt-1">Simulated depth of field</p>
+                          <h4 className="font-bold text-xs text-white/80 group-hover:text-white transition-colors">Background Blur</h4>
+                          <p className="text-[9px] text-white/30">Simulated depth of field</p>
                         </div>
-                        <button onClick={() => setBackgroundBlur(!backgroundBlur)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${backgroundBlur ? 'bg-brand-primary' : 'bg-white/20'}`}>
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${backgroundBlur ? 'translate-x-6' : 'translate-x-1'}`} />
+                        <button onClick={() => setBackgroundBlur(!backgroundBlur)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${backgroundBlur ? 'bg-brand-primary' : 'bg-white/10'}`}>
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${backgroundBlur ? 'translate-x-5' : 'translate-x-1'}`} />
                         </button>
                       </div>
 
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
+                      <div className="p-3 bg-white/2 border border-white/5 rounded-xl flex items-center justify-between hover:bg-white/5 transition-colors group">
                         <div>
-                          <h4 className="font-bold text-sm text-white">Cinematic Color Pop</h4>
-                          <p className="text-xs text-white/50 mt-1">DSLR color grading</p>
+                          <h4 className="font-bold text-xs text-white/80 group-hover:text-white transition-colors">Cinematic Color Pop</h4>
+                          <p className="text-[9px] text-white/30">DSLR color grading</p>
                         </div>
-                        <button onClick={() => setColorPop(!colorPop)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${colorPop ? 'bg-brand-primary' : 'bg-white/20'}`}>
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${colorPop ? 'translate-x-6' : 'translate-x-1'}`} />
+                        <button onClick={() => setColorPop(!colorPop)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${colorPop ? 'bg-brand-primary' : 'bg-white/10'}`}>
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${colorPop ? 'translate-x-5' : 'translate-x-1'}`} />
                         </button>
                       </div>
 
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
+                      <div className="p-3 bg-white/2 border border-white/5 rounded-xl flex items-center justify-between hover:bg-white/5 transition-colors group">
                         <div>
-                          <h4 className="font-bold text-sm text-white">Smart HDR</h4>
-                          <p className="text-xs text-white/50 mt-1">Dynamic shadow recovery</p>
+                          <h4 className="font-bold text-xs text-white/80 group-hover:text-white transition-colors">Smart HDR</h4>
+                          <p className="text-[9px] text-white/30">Dynamic shadow recovery</p>
                         </div>
-                        <button onClick={() => setSmartHdr(!smartHdr)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${smartHdr ? 'bg-brand-primary' : 'bg-white/20'}`}>
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${smartHdr ? 'translate-x-6' : 'translate-x-1'}`} />
+                        <button onClick={() => setSmartHdr(!smartHdr)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${smartHdr ? 'bg-brand-primary' : 'bg-white/10'}`}>
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${smartHdr ? 'translate-x-5' : 'translate-x-1'}`} />
                         </button>
                       </div>
                     </div>
                   )}
 
                   {(selectedMode === 'portrait' || selectedMode === 'portrait_blur') && (
-                    <div className="mt-6 p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
-                      <div>
-                        <h4 className="font-bold text-sm text-white">Face Enhancement</h4>
-                        <p className="text-xs text-white/50 mt-1">AI GFPGAN facial restoration</p>
+                    <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
+                      <h4 className="font-bold text-[10px] text-white/40 uppercase tracking-widest mb-2">Portrait Features</h4>
+                      
+                      <div className="p-3 bg-white/2 border border-white/5 rounded-xl flex items-center justify-between hover:bg-white/5 transition-colors group">
+                        <div>
+                          <h4 className="font-bold text-xs text-white/80 group-hover:text-white transition-colors">Face Enhancement</h4>
+                          <p className="text-[9px] text-white/30">AI GFPGAN facial restoration</p>
+                        </div>
+                        <button 
+                          onClick={() => setFaceEnhancement(!faceEnhancement)} 
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${faceEnhancement ? 'bg-brand-primary' : 'bg-white/10'}`}
+                        >
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${faceEnhancement ? 'translate-x-5' : 'translate-x-1'}`} />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => setFaceEnhancement(!faceEnhancement)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${faceEnhancement ? 'bg-brand-primary' : 'bg-white/20'}`}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${faceEnhancement ? 'translate-x-6' : 'translate-x-1'}`} />
-                      </button>
                     </div>
                   )}
 
@@ -1531,7 +1671,10 @@ function AppContent() {
                             if (activeFile.enhancedUrl) {
                               const link = document.createElement('a');
                               link.href = activeFile.enhancedUrl;
-                              link.download = `enhanced-${activeFile.file.name}`;
+                              // Ensure the extension is .jpg as the server saves in high-quality JPEG
+                              let baseName = activeFile.file.name.split('.').slice(0, -1).join('.');
+                              if (!baseName) baseName = activeFile.file.name;
+                              link.download = `talha-ai-enhanced-${baseName}.jpg`;
                               document.body.appendChild(link);
                               link.click();
                               document.body.removeChild(link);
@@ -1579,16 +1722,16 @@ function AppContent() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="max-w-3xl mx-auto"
+              className="max-w-3xl mx-auto mt-8 md:mt-12"
             >
               <div 
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={onDrop}
-                className={`relative aspect-video rounded-3xl border-2 border-dashed transition-all duration-500 flex flex-col items-center justify-center overflow-hidden ${
+                className={`relative min-h-[400px] md:min-h-[500px] rounded-3xl border-2 border-dashed transition-all duration-500 flex flex-col items-center justify-center overflow-hidden bg-black/20 ${
                   isDragging 
                     ? 'border-brand-primary bg-brand-primary/5 scale-[1.01]' 
-                    : 'border-white/10 hover:border-white/20 bg-white/5'
+                    : 'border-white/10 hover:border-white/20'
                 }`}
               >
                 <div className="text-center p-12">
@@ -1721,45 +1864,12 @@ function AppContent() {
               ) : (
                 <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-250px)] pr-2 no-scrollbar">
                   {filteredHistory.map((item) => (
-                    <div key={item.id} className="group relative aspect-video rounded-2xl overflow-hidden border border-white/10 hover:border-brand-primary/50 transition-all bg-black/40">
-                      <img src={item.enhanced} alt="History" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                      
-                      {/* Top Actions */}
-                      <div className="absolute top-0 left-0 right-0 p-3 flex justify-between items-start opacity-0 group-hover:opacity-100 transition-all translate-y-[-10px] group-hover:translate-y-0 bg-gradient-to-b from-black/80 to-transparent">
-                        <button 
-                          onClick={() => handleReapplyHistoryItem(item)}
-                          className="px-3 py-1.5 bg-brand-primary text-black text-[10px] font-black rounded-lg hover:bg-white transition-colors uppercase tracking-widest"
-                        >
-                          RE-APPLY
-                        </button>
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={() => handleDownloadHistoryItem(item)}
-                            className="p-2 bg-black/50 backdrop-blur-md border border-white/20 rounded-lg text-white hover:bg-brand-primary hover:text-black transition-all"
-                            title="Download"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Bottom Info */}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 translate-y-[10px] group-hover:translate-y-0 transition-all">
-                        <div className="flex justify-between items-end">
-                          <div className="flex-1 min-w-0">
-                            <span className="text-white font-bold text-sm block truncate mb-0.5">{item.name}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-brand-primary px-1.5 py-0.5 rounded bg-brand-primary/10 border border-brand-primary/20">
-                                {item.mode.replace('_', ' ')}
-                              </span>
-                              <span className="text-[9px] text-white/40 font-medium">
-                                {new Date(item.timestamp).toLocaleDateString()}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <HistoryItemCard 
+                      key={item.id} 
+                      item={item} 
+                      onReapply={handleReapplyHistoryItem}
+                      onDownload={handleDownloadHistoryItem}
+                    />
                   ))}
                 </div>
               )}
@@ -1769,20 +1879,69 @@ function AppContent() {
       </AnimatePresence>
 
       {/* Footer */}
-      <footer className="relative z-10 py-12 px-6 border-t border-white/5 mt-20">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex items-center gap-2 opacity-50">
-            <Sparkles className="w-5 h-5" />
-            <span className="font-bold tracking-tighter">LUMINA AI</span>
+      <footer className="relative z-10 pt-20 pb-12 px-6 border-t border-white/5 bg-black/20 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+            <div className="col-span-1 md:col-span-2">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary border border-brand-primary/20">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <span className="text-2xl font-black tracking-tighter">TALHA AI</span>
+              </div>
+              <p className="text-white/40 max-w-sm mb-8 leading-relaxed text-sm">
+                Empowering creators with professional-grade AI image enhancement tools. Redefining clarity, one pixel at a time through advanced neural networks.
+              </p>
+              <div className="flex gap-4">
+                {[
+                  { icon: Linkedin, url: 'https://www.linkedin.com/in/muhammad-talha-6278463a1' },
+                  { icon: Mail, url: 'mailto:moyih50210@gmail.com' },
+                  { icon: MessageSquare, url: 'https://wa.me/923365026229' }
+                ].map((social, i) => (
+                  <motion.button
+                    key={i}
+                    whileHover={{ y: -3, backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#00f2ff' }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => window.open(social.url, '_blank')}
+                    className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white/40 transition-all border border-white/5"
+                  >
+                    <social.icon className="w-5 h-5" />
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-8 col-span-1 md:col-span-2">
+              <div>
+                <h4 className="text-white font-bold mb-6 uppercase tracking-widest text-[10px]">Product</h4>
+                <ul className="space-y-4 text-sm text-white/40">
+                  <li><button onClick={() => scrollToSection(showcaseRef)} className="hover:text-brand-primary transition-colors text-left">Showcase</button></li>
+                  <li><button className="hover:text-brand-primary transition-colors text-left">API Docs</button></li>
+                  <li><button className="hover:text-brand-primary transition-colors text-left">Features</button></li>
+                  <li><button className="hover:text-brand-primary transition-colors text-left">Pricing</button></li>
+                </ul>
+              </div>
+              
+              <div>
+                <h4 className="text-white font-bold mb-6 uppercase tracking-widest text-[10px]">Legal & Support</h4>
+                <ul className="space-y-4 text-sm text-white/40">
+                  <li><button onClick={() => setActivePolicy('privacy')} className="hover:text-brand-primary transition-colors text-left">Privacy Policy</button></li>
+                  <li><button onClick={() => setActivePolicy('terms')} className="hover:text-brand-primary transition-colors text-left">Terms of Service</button></li>
+                  <li><button className="hover:text-brand-primary transition-colors text-left">Support</button></li>
+                  <li><button className="hover:text-brand-primary transition-colors text-left">Contact</button></li>
+                </ul>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-8 text-sm text-white/40">
-            <button onClick={() => setActivePolicy('privacy')} className="hover:text-white transition-colors">Privacy Policy</button>
-            <button onClick={() => setActivePolicy('terms')} className="hover:text-white transition-colors">Terms of Service</button>
-            <button onClick={() => scrollToSection(showcaseRef)} className="hover:text-white transition-colors">Showcase</button>
-            <a href="#" className="hover:text-white transition-colors">API Docs</a>
-            <a href="#" className="hover:text-white transition-colors">Support</a>
+          
+          <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
+            <p className="text-[10px] text-white/20 font-medium uppercase tracking-widest">© 2026 Talha AI. All rights reserved. Crafted by Muhammad Talha.</p>
+            <div className="flex gap-6 text-[10px] font-bold text-white/20 uppercase tracking-widest">
+              <span className="hover:text-white/40 cursor-pointer transition-colors">Security</span>
+              <span className="hover:text-white/40 cursor-pointer transition-colors">System Status</span>
+              <span className="hover:text-white/40 cursor-pointer transition-colors">Cookies</span>
+            </div>
           </div>
-          <p className="text-xs text-white/20">© 2026 Talha AI. All rights reserved.</p>
         </div>
       </footer>
 
